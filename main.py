@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QMessageBox,
     QWidget, QCheckBox, QTextEdit, QHBoxLayout, QToolBar, QDockWidget, QTableWidget, QTableWidgetItem, QMenu
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
-from Preprocessor import PreprocessorTab  # Импортируем исправленный класс
+from Preprocessor import PreprocessorTab
 
 class MainWindow(QMainWindow):
     def __init__(self):

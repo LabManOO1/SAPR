@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (QPushButton, QLabel,
-                             QVBoxLayout, QWidget, QCheckBox,
+                             QVBoxLayout, QWidget,
                              QHBoxLayout,)
 from PyQt5.QtCore import Qt
 from setConstruction import Dock_cunstraction
@@ -20,11 +20,7 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget, а не от
         label = QLabel('Изображение')
         middle_layout.addWidget(label)
 
-        bottom_layout = QHBoxLayout()
-        left_seal_ChBox = QCheckBox()
-        text_left_seal_ChBox = QLabel('Левая заделка')
-        text_right_seal_ChBox = QLabel('Правая заделка')
-        right_seal_ChBox = QCheckBox()
+
 
         FileButton = QPushButton('Файл')
         top_layout.addWidget(FileButton)
@@ -39,12 +35,7 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget, а не от
 
         top_layout.addWidget(self.toggle_dock_btn)
 
-        bottom_layout.addWidget(left_seal_ChBox)
-        bottom_layout.addWidget(text_left_seal_ChBox)
-        bottom_layout.addSpacing(25)
-        bottom_layout.addWidget(right_seal_ChBox)
-        bottom_layout.addWidget(text_right_seal_ChBox)
-        bottom_layout.addStretch(1)
+
 
         mainPreProc_layout.addLayout(top_layout)
         mainPreProc_layout.addStretch(1)
@@ -52,7 +43,6 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget, а не от
         mainPreProc_layout.addLayout(middle_layout)
         mainPreProc_layout.addStretch(1)
 
-        mainPreProc_layout.addLayout(bottom_layout)
 
         mainPreProc_layout.setAlignment(middle_layout, Qt.AlignCenter)
 

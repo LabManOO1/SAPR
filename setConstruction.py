@@ -1,15 +1,20 @@
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (QVBoxLayout, QWidget,
-                             QDockWidget, QTableWidget, QTableWidgetItem, QPushButton, QHBoxLayout, QSizePolicy, QLabel, QCheckBox)
+                             QDockWidget, QTableWidget, QTableWidgetItem, QPushButton, QHBoxLayout, QSizePolicy, QLabel,
+                             QCheckBox, QApplication, QMessageBox)
 from PyQt5.QtCore import Qt
 from setConstructionTable import ConstructionTable
+import json
+import os
 
 
 class Dock_cunstraction(QDockWidget):
     def __init__(self, parent=None):
         super().__init__(parent=parent)  # Используем современный синтаксис
+        self.mainWindow = parent
         self.setupUI()
         self.setWindowTitle('Конструкция')
+
 
     def setupUI(self):
         self.setMinimumWidth(650)
@@ -19,32 +24,34 @@ class Dock_cunstraction(QDockWidget):
         dock_layout = QVBoxLayout(dock_content)
 
         # Добавляем таблицу (Стержни)
-        self.rodsTable = ConstructionTable("rod", 1, 4, ['Длина, L', 'Поперечное сечение, A', 'Модуль упругости, Е', 'Напряжение'])
+        self.barsTable = ConstructionTable("bar", 1, 4, ['Длина, L', 'Поперечное сечение, A', 'Модуль упругости, Е', 'Напряжение, σ'], parent=self.mainWindow)
+        self.barsTable.itemChanged.connect(self.on_table_item_changed)
 
-        rodsTableTitle = QLabel('Стержни')
-        rodsTableTitle.setAlignment(Qt.AlignCenter)
-        dock_layout.addWidget(rodsTableTitle)
+        barsTableTitle = QLabel('Стержни')
+        barsTableTitle.setAlignment(Qt.AlignCenter)
+        dock_layout.addWidget(barsTableTitle)
 
-        rodsLayout = QHBoxLayout()
-        rodsLayout.addStretch(1)
-        addRod = QPushButton('Добавить')
-        remRod = QPushButton('Удалить')
-        addRod.clicked.connect(self.rodsTable.add_row)
-        remRod.clicked.connect(self.rodsTable.remove_selected_row)
-        addRod.setFixedSize(170, 30)
-        remRod.setFixedSize(170, 30)
-        rodsLayout.addWidget(addRod)
-        rodsLayout.addWidget(remRod)
+        barsLayout = QHBoxLayout()
+        barsLayout.addStretch(1)
+        addBar = QPushButton('Добавить')
+        remBar = QPushButton('Удалить')
+        addBar.clicked.connect(self.barsTable.add_row)
+        remBar.clicked.connect(self.barsTable.remove_selected_row)
+        addBar.setFixedSize(170, 30)
+        remBar.setFixedSize(170, 30)
+        barsLayout.addWidget(addBar)
+        barsLayout.addWidget(remBar)
 
-        dock_layout.addWidget(self.rodsTable)
-        dock_layout.addLayout(rodsLayout)
+        dock_layout.addWidget(self.barsTable)
+        dock_layout.addLayout(barsLayout)
         # Добавляем таблицы (нагрузки)
         LoadLayout = QHBoxLayout()
 
 
         # Добавляем таблицу (Сосредоточенные нагрузки)
 
-        self.concentratedLoadsTable = ConstructionTable("node_loads", 5, 2, ['Номер узла', 'Значение, F'])
+        self.concentratedLoadsTable = ConstructionTable("node_loads", 3, 2, ['Номер узла', 'Значение, F'], parent=self.mainWindow)
+        self.concentratedLoadsTable.itemChanged.connect(self.on_table_item_changed)
 
         concLoadsTableTitle = QLabel('Сосредоточенные нагрузки')
         concLoadsTableTitle.setAlignment(Qt.AlignCenter)
@@ -67,7 +74,8 @@ class Dock_cunstraction(QDockWidget):
 
         # Добавляем таблицу (Распределенные нагрузки)
 
-        self.distributedLoadTable = ConstructionTable("distributed_loads", 1, 2, ['Номер стержня', 'Значение, q'])
+        self.distributedLoadTable = ConstructionTable("distributed_loads", 1, 2, ['Номер стержня', 'Значение, q'], parent=self.mainWindow)
+        self.distributedLoadTable.itemChanged.connect(self.on_table_item_changed)
 
         distrLoadsTableTitle = QLabel('Распределенные нагрузки')
         distrLoadsTableTitle.setAlignment(Qt.AlignCenter)
@@ -102,22 +110,14 @@ class Dock_cunstraction(QDockWidget):
         text_right_seal_ChBox = QLabel('Правая заделка')
         right_seal_ChBox = QCheckBox()
 
-        save = QPushButton('Сохранить')
-        save.clicked.connect(self.save)
-
-
-
-
         sealingLayout.addWidget(left_seal_ChBox)
         sealingLayout.addWidget(text_left_seal_ChBox)
         sealingLayout.addSpacing(20)
         sealingLayout.addWidget(right_seal_ChBox)
         sealingLayout.addWidget(text_right_seal_ChBox)
         sealingLayout.addStretch(1)
-        sealingLayout.addWidget(save)
 
         dock_layout.addLayout(sealingLayout)
-
 
         self.setWidget(dock_content)
 
@@ -132,13 +132,6 @@ class Dock_cunstraction(QDockWidget):
         # Скрываем меню по умолчанию
         self.setVisible(False)
 
-    def save(self):
-        data = {}
-        Objects = []
-        if self.rodsTable.getTableData() and self.concentratedLoadsTable.getTableData() and self.distributedLoadTable.getTableData():
-            Objects.append(self.rodsTable.getTableData())
-            Objects.append(self.concentratedLoadsTable.getTableData())
-            Objects.append(self.distributedLoadTable.getTableData())
-        data["Objects"] = Objects
-        print(data)
+    def on_table_item_changed(self):
+        self.mainWindow.statusLabel.setText("Проект не сохранен")
 

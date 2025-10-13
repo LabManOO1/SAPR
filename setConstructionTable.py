@@ -1,10 +1,32 @@
-import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QMessageBox, QLabel, QVBoxLayout, QTabWidget, \
-    QWidget, QCheckBox, QTextEdit, QHBoxLayout, QToolBar, QDockWidget, QTableWidget, QTableWidgetItem, QMenu, QHeaderView, QSizePolicy
+from PyQt5.QtWidgets import QMessageBox, QTableWidget, QHeaderView, QItemDelegate, QLineEdit
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QDoubleValidator, QIntValidator
 
 
+class NumericDelegate(QItemDelegate):
+    def __init__(self, parent=None, is_integer=False, is_plus=False):
+        super().__init__(parent)
+        self.main_window = parent
+        self.is_integer = is_integer
+        self.is_plus = is_plus
+
+    def createEditor(self, parent, option, index):
+        editor = QLineEdit(parent)
+
+        if self.is_integer:
+            # Только целые числа
+            validator = QIntValidator()
+            if self.is_plus:
+                validator.setBottom(0)  # Только положительные числа
+        else:
+            # Дробные числа
+            validator = QDoubleValidator()
+            if self.is_plus:
+                validator.setBottom(0)  # Только положительные числа
+            validator.setNotation(QDoubleValidator.StandardNotation)
+
+        editor.setValidator(validator)
+        return editor
 
 class ConstructionTable(QTableWidget):
     def __init__(self, type, rowCount, columnCount, headers, data=None, parent=None):
@@ -13,13 +35,23 @@ class ConstructionTable(QTableWidget):
         self.setColumnCount(columnCount)
         self.fillingTable(data)
         self.setHorizontalHeaderLabels(headers)
-        self.setupTable()
         self.type = type
-
+        self.setupTable()
 
     def setupTable(self):
         self.resizeColumnsToContents()
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # Растянуть по ширине
+        self.setDelegate()
+
+    def setDelegate(self):
+        if self.type == "bar":
+            self.setItemDelegate(NumericDelegate(self, is_integer=False, is_plus=True))
+        if self.type == "node_loads":
+            self.setItemDelegateForColumn(0, NumericDelegate(self, is_integer=True, is_plus=True))
+            self.setItemDelegateForColumn(1, NumericDelegate(self, is_integer=False, is_plus=False))
+        if self.type == "distributed_loads":
+            self.setItemDelegateForColumn(0, NumericDelegate(self, is_integer=True, is_plus=True))
+            self.setItemDelegateForColumn(1, NumericDelegate(self, is_integer=False, is_plus=False))
 
     def fillingTable(self, data):
         if data is None:
@@ -51,15 +83,6 @@ class ConstructionTable(QTableWidget):
             QMessageBox.information(self, "Информация", "Выберите строку для удаления")
             return
 
-        # Подтверждение удаления
-        # reply = QMessageBox.question(self, "Подтверждение",
-        #                              f"Удалить строку {current_row}?",
-        #                              QMessageBox.Yes | QMessageBox.No)
-
-        # if reply == QMessageBox.Yes:
-        #     self.removeRow(current_row)
-        #     self.clearSelection()
-        #     self.setCurrentCell(-1, -1)
         self.removeRow(current_row)
         self.clearSelection()
         self.setCurrentCell(-1, -1)
@@ -72,7 +95,8 @@ class ConstructionTable(QTableWidget):
 
         elif event.key() == Qt.Key_Backspace:
             # Backspace - очистить содержимое ячеек
-            self.clear_selected_cells()
+            for item in self.selectedItems():
+                self.setItem(item.row(), item.column(), None)  # Устанавливаем None
 
         else:
             super().keyPressEvent(event)
@@ -88,57 +112,53 @@ class ConstructionTable(QTableWidget):
         data = {}
         data["Object"] = self.type
         list_of_values = []
+        f = True
+        barsCount = self.rowCount()
 
-        rodsCount = self.rowCount()
 
-        if self.type == "rod":
+        if self.type == "bar":
+            data["quantity"] = barsCount
             for row in range(self.rowCount()):
-                if self.item(row, 0) and self.item(row, 1) and self.item(row, 2) and self.item(row, 3):
-                    row_data = {}
-                    row_data["rodNumber"] = row
+                if all([self.item(row, 0), self.item(row, 1), self.item(row, 2), self.item(row, 3)]):
+                    row_data = dict()
+                    row_data["barNumber"] = row
                     row_data["length"] = self.item(row, 0).text()
                     row_data["cross_section"] = self.item(row, 1).text()
                     row_data["modulus_of_elasticity"] = self.item(row, 2).text()
                     row_data["pressure"] = self.item(row, 3).text()
                     list_of_values.append(row_data)
                 else:
-                    QMessageBox.information(self, "Информация", "Данные заполнены некорректно!")
-                    return
+                    f = False
             data["list_of_values"] = list_of_values
 
         if self.type == "node_loads":
+            data["quantity"] = barsCount
             for row in range(self.rowCount()):
                 if self.item(row, 0) and self.item(row, 1):
-                    row_data = {}
+                    row_data = dict()
                     row_data["node_number"] = self.item(row, 0).text()
                     row_data["force_value"] = self.item(row, 1).text()
                     list_of_values.append(row_data)
                 else:
-                    QMessageBox.information(self, "Информация", "Данные заполнены некорректно!")
-                    return
+                    f = False
             data["list_of_values"] = list_of_values
 
         if self.type == "distributed_loads":
+            data["quantity"] = barsCount
             for row in range(self.rowCount()):
                 if self.item(row, 0) and self.item(row, 1):
-                    row_data = {}
-                    row_data["rod_number"] = self.item(row, 0).text()
+                    row_data = dict()
+                    row_data["bar_number"] = self.item(row, 0).text()
                     row_data["distributed_value"] = self.item(row, 1).text()
                     list_of_values.append(row_data)
                 else:
-                    QMessageBox.information(self, "Информация", "Данные заполнены некорректно!")
-                    return
+                    f = False
             data["list_of_values"] = list_of_values
-        return data
+        if f:
+            return data
+        else:
+            return
 
-
-
-
-
-
-
-        for rodNumber in range(rodsCount):
-            pass
 
 
 

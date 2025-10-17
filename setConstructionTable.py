@@ -1,12 +1,22 @@
-from PyQt5.QtWidgets import QMessageBox, QTableWidget, QHeaderView, QItemDelegate, QLineEdit
+from PyQt5.QtWidgets import QMessageBox, QTableWidget, QHeaderView, QItemDelegate, QLineEdit, QTableWidgetItem
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QDoubleValidator, QIntValidator
+from PyQt5.QtGui import QDoubleValidator, QIntValidator, QValidator
+
+
+class EmptyAllowedValidator(QValidator):
+    def __init__(self, base_validator, parent=None):
+        super().__init__(parent)
+        self.base_validator = base_validator
+
+    def validate(self, text, pos):
+        if text.strip() == "":
+            return QValidator.Acceptable, text, pos
+        return self.base_validator.validate(text, pos)
 
 
 class NumericDelegate(QItemDelegate):
     def __init__(self, parent=None, is_integer=False, is_plus=False):
         super().__init__(parent)
-        self.main_window = parent
         self.is_integer = is_integer
         self.is_plus = is_plus
 
@@ -14,25 +24,55 @@ class NumericDelegate(QItemDelegate):
         editor = QLineEdit(parent)
 
         if self.is_integer:
-            # Только целые числа
             validator = QIntValidator()
             if self.is_plus:
-                validator.setBottom(0)  # Только положительные числа
+                validator.setBottom(0)
+            editor.setValidator(EmptyAllowedValidator(validator))
         else:
-            # Дробные числа
             validator = QDoubleValidator()
             if self.is_plus:
-                validator.setBottom(0)  # Только положительные числа
+                validator.setBottom(0.0)
             validator.setNotation(QDoubleValidator.StandardNotation)
+            editor.setValidator(EmptyAllowedValidator(validator))
 
-        editor.setValidator(validator)
         return editor
 
+
+    def setModelData(self, editor, model, index):
+        """Сохраняем данные из редактора в модель"""
+        text = editor.text().strip()
+
+        # Разрешаем пустые значения
+        if text == "":
+            model.setData(index, "", Qt.EditRole)
+        else:
+            # Проверяем валидность только если текст не пустой
+            if self.is_integer:
+                try:
+                    value = int(text)
+                    if self.is_plus and value < 0:
+                        # Если требуется положительное число, но введено отрицательное
+                        model.setData(index, "", Qt.EditRole)
+                    else:
+                        model.setData(index, text, Qt.EditRole)
+                except ValueError:
+                    model.setData(index, "", Qt.EditRole)
+            else:
+                try:
+                    value = float(text)
+                    if self.is_plus and value < 0:
+                        model.setData(index, "", Qt.EditRole)
+                    else:
+                        model.setData(index, text, Qt.EditRole)
+                except ValueError:
+                    model.setData(index, "", Qt.EditRole)
+
 class ConstructionTable(QTableWidget):
-    def __init__(self, type, rowCount, columnCount, headers, data=None, parent=None):
+    def __init__(self, type, columnCount, headers, rowCount=0, data=None, parent=None):
         super().__init__(parent=parent)
         self.setRowCount(rowCount)
         self.setColumnCount(columnCount)
+        self.setItem
         self.fillingTable(data)
         self.setHorizontalHeaderLabels(headers)
         self.type = type
@@ -64,8 +104,15 @@ class ConstructionTable(QTableWidget):
             QMessageBox.warning(self, "Предупреждение", f"Нельзя добавить более {max_rows} строк")
             return
 
-        row_position = self.rowCount()
-        self.insertRow(row_position)
+        if self.currentRow() < 0:
+            row_position = self.rowCount()
+            self.insertRow(row_position)
+        else:
+            self.insertRow(self.currentRow() + 1)
+            self.clearSelection()
+
+        self.clearSelection()
+        self.setCurrentCell(-1, -1)
 
     def remove_selected_row(self):
         """Удалить выбранную строку"""
@@ -93,6 +140,9 @@ class ConstructionTable(QTableWidget):
             # Delete - удалить строки
             self.remove_selected_row()
 
+        elif event.key() == Qt.Key_Insert:
+            self.add_row()
+
         elif event.key() == Qt.Key_Backspace:
             # Backspace - очистить содержимое ячеек
             for item in self.selectedItems():
@@ -106,6 +156,28 @@ class ConstructionTable(QTableWidget):
         for item in self.selectedItems():
             item.setText("")
 
+    def setTableData(self, data):
+        if self.type == "bar":
+            self.setRowCount(int(data["Objects"][0]["quantity"]))
+            for list_of_values in data["Objects"][0]["list_of_values"]:
+                self.setItem(list_of_values["barNumber"] - 1, 0, QTableWidgetItem(str(list_of_values["length"])))
+                self.setItem(list_of_values["barNumber"] - 1, 1, QTableWidgetItem(str(list_of_values["cross_section"])))
+                self.setItem(list_of_values["barNumber"] - 1, 2, QTableWidgetItem(str(list_of_values["modulus_of_elasticity"])))
+                self.setItem(list_of_values["barNumber"] - 1, 3, QTableWidgetItem(str(list_of_values["pressure"])))
+        if self.type == "node_loads":
+            current_row = 0
+            self.setRowCount(int(data["Objects"][1]["quantity"]))
+            for list_of_values in data["Objects"][1]["list_of_values"]:
+                self.setItem(current_row, 0, QTableWidgetItem(str(list_of_values["node_number"])))
+                self.setItem(current_row, 1, QTableWidgetItem(str(list_of_values["force_value"])))
+                current_row += 1
+        if self.type == "distributed_loads":
+            current_row = 0
+            self.setRowCount(int(data["Objects"][2]["quantity"]))
+            for list_of_values in data["Objects"][2]["list_of_values"]:
+                self.setItem(current_row, 0, QTableWidgetItem(str(list_of_values["bar_number"])))
+                self.setItem(current_row, 1, QTableWidgetItem(str(list_of_values["distributed_value"])))
+                current_row += 1
 
     def getTableData(self):
         """Получить данные таблицы в виде словаря"""
@@ -113,15 +185,16 @@ class ConstructionTable(QTableWidget):
         data["Object"] = self.type
         list_of_values = []
         f = True
-        barsCount = self.rowCount()
-
+        rowsCount = self.rowCount()
+        if (self.type == "bar") and (self.rowCount() == 0):
+            f = False
 
         if self.type == "bar":
-            data["quantity"] = barsCount
+            data["quantity"] = rowsCount
             for row in range(self.rowCount()):
                 if all([self.item(row, 0), self.item(row, 1), self.item(row, 2), self.item(row, 3)]):
                     row_data = dict()
-                    row_data["barNumber"] = row
+                    row_data["barNumber"] = row + 1
                     row_data["length"] = self.item(row, 0).text()
                     row_data["cross_section"] = self.item(row, 1).text()
                     row_data["modulus_of_elasticity"] = self.item(row, 2).text()
@@ -132,7 +205,7 @@ class ConstructionTable(QTableWidget):
             data["list_of_values"] = list_of_values
 
         if self.type == "node_loads":
-            data["quantity"] = barsCount
+            data["quantity"] = rowsCount
             for row in range(self.rowCount()):
                 if self.item(row, 0) and self.item(row, 1):
                     row_data = dict()
@@ -144,7 +217,7 @@ class ConstructionTable(QTableWidget):
             data["list_of_values"] = list_of_values
 
         if self.type == "distributed_loads":
-            data["quantity"] = barsCount
+            data["quantity"] = rowsCount
             for row in range(self.rowCount()):
                 if self.item(row, 0) and self.item(row, 1):
                     row_data = dict()
@@ -157,9 +230,4 @@ class ConstructionTable(QTableWidget):
         if f:
             return data
         else:
-            return
-
-
-
-
-
+            return False

@@ -1,11 +1,8 @@
-from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (QVBoxLayout, QWidget,
-                             QDockWidget, QTableWidget, QTableWidgetItem, QPushButton, QHBoxLayout, QSizePolicy, QLabel,
-                             QCheckBox, QApplication, QMessageBox)
+                             QDockWidget, QPushButton, QHBoxLayout, QLabel,
+                             QCheckBox)
 from PyQt5.QtCore import Qt
 from setConstructionTable import ConstructionTable
-import json
-import os
 
 
 class Dock_cunstraction(QDockWidget):
@@ -24,7 +21,7 @@ class Dock_cunstraction(QDockWidget):
         dock_layout = QVBoxLayout(dock_content)
 
         # Добавляем таблицу (Стержни)
-        self.barsTable = ConstructionTable("bar", 1, 4, ['Длина, L', 'Поперечное сечение, A', 'Модуль упругости, Е', 'Напряжение, σ'], parent=self.mainWindow)
+        self.barsTable = ConstructionTable("bar", 4, ['Длина, L', 'Поперечное сечение, A', 'Модуль упругости, Е', 'Напряжение, σ'], parent=self.mainWindow)
         self.barsTable.itemChanged.connect(self.on_table_item_changed)
 
         barsTableTitle = QLabel('Стержни')
@@ -50,7 +47,7 @@ class Dock_cunstraction(QDockWidget):
 
         # Добавляем таблицу (Сосредоточенные нагрузки)
 
-        self.concentratedLoadsTable = ConstructionTable("node_loads", 3, 2, ['Номер узла', 'Значение, F'], parent=self.mainWindow)
+        self.concentratedLoadsTable = ConstructionTable("node_loads", 2, ['Номер узла', 'Значение, F'], parent=self.mainWindow)
         self.concentratedLoadsTable.itemChanged.connect(self.on_table_item_changed)
 
         concLoadsTableTitle = QLabel('Сосредоточенные нагрузки')
@@ -74,14 +71,13 @@ class Dock_cunstraction(QDockWidget):
 
         # Добавляем таблицу (Распределенные нагрузки)
 
-        self.distributedLoadTable = ConstructionTable("distributed_loads", 1, 2, ['Номер стержня', 'Значение, q'], parent=self.mainWindow)
+        self.distributedLoadTable = ConstructionTable("distributed_loads", 2, ['Номер стержня', 'Значение, q'], parent=self.mainWindow)
         self.distributedLoadTable.itemChanged.connect(self.on_table_item_changed)
 
         distrLoadsTableTitle = QLabel('Распределенные нагрузки')
         distrLoadsTableTitle.setAlignment(Qt.AlignCenter)
         distrLoadLayout = QVBoxLayout()
         distrLoadLayout.addWidget(distrLoadsTableTitle)
-
 
         buttonsDistrLayout = QHBoxLayout()
         addDistrLoad = QPushButton('Добавить')
@@ -90,7 +86,6 @@ class Dock_cunstraction(QDockWidget):
         remDistrLoad.setFixedHeight(30)
         addDistrLoad.clicked.connect(self.distributedLoadTable.add_row)
         remDistrLoad.clicked.connect(self.distributedLoadTable.remove_selected_row)
-
 
         buttonsDistrLayout.addWidget(addDistrLoad)
         buttonsDistrLayout.addWidget(remDistrLoad)
@@ -105,15 +100,15 @@ class Dock_cunstraction(QDockWidget):
 
         # Управление заделками
         sealingLayout = QHBoxLayout()
-        left_seal_ChBox = QCheckBox()
+        self.left_seal_ChBox = QCheckBox()
         text_left_seal_ChBox = QLabel('Левая заделка')
         text_right_seal_ChBox = QLabel('Правая заделка')
-        right_seal_ChBox = QCheckBox()
+        self.right_seal_ChBox = QCheckBox()
 
-        sealingLayout.addWidget(left_seal_ChBox)
+        sealingLayout.addWidget(self.left_seal_ChBox)
         sealingLayout.addWidget(text_left_seal_ChBox)
         sealingLayout.addSpacing(20)
-        sealingLayout.addWidget(right_seal_ChBox)
+        sealingLayout.addWidget(self.right_seal_ChBox)
         sealingLayout.addWidget(text_right_seal_ChBox)
         sealingLayout.addStretch(1)
 
@@ -134,4 +129,3 @@ class Dock_cunstraction(QDockWidget):
 
     def on_table_item_changed(self):
         self.mainWindow.statusLabel.setText("Проект не сохранен")
-

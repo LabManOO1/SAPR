@@ -22,60 +22,9 @@ class FileManager(QFileDialog):
             if not self.file_path.endswith('.json'):
                 self.file_path += '.json'
 
-            # Создаем файл
-            try:
-                with open(self.file_path, 'x', encoding='utf-8') as f:
-                    # Записываем базовую структуру проекта
-                    import json
-                    basic_project = {
-                          "Objects": [
-                            {
-                              "Object": "bar",
-                              "quantity": "1",
-                              "list_of_values": [
-                              {
-                                "barNumber": "",
-                                "length": "",
-                                "cross_section": "",
-                                "modulus_of_elasticity": "",
-                                "pressure": ""
-                              }
-                            ]
-                          },
-                            {
-                              "Object": "node_loads",
-                              "quantity": "1",
-                              "list_of_values": [
-                                {
-                                  "node_number": "",
-                                  "force_value": ""
-                                }
-                              ]
-                            },
-                            {
-                              "Object": "distributed_loads",
-                              "quantity": "1",
-                              "list_of_values": [
-                                {
-                                  "bar_number": "",
-                                  "distributed_value": ""
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                    json.dump(basic_project, f, indent=2)
-
-
-                self.selected_file_path = self.file_path  # Сохраняем путь
-                self.done(1)  # Завершаем с кодом 1 (успех)
-
-            except Exception as e:
-                QMessageBox.critical(self, "Ошибка", f"Не удалось создать файл: {str(e)}")
-                # Не завершаем диалог - пользователь может попробовать снова
+            return self.file_path
         else:
-            # Пользователь нажал Cancel - остаемся в диалоге
-            pass
+            return None
 
     def open_existing_project(self):
         """Обработчик открытия существующего проекта"""
@@ -89,7 +38,8 @@ class FileManager(QFileDialog):
         if self.file_path:  # Если пользователь выбрал файл
             # Простая проверка существования файла
             if os.path.exists(self.file_path):
-                self.selected_file_path = self.file_path
-                self.done(2)  # Завершаем ТОЛЬКО если файл выбран и существует
+                return self.file_path
             else:
                 QMessageBox.warning(self, "Ошибка", "Файл не существует")
+        else:
+            return None

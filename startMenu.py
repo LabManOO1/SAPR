@@ -1,11 +1,11 @@
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QPushButton, QLabel, QFrame)
 from PyQt5.QtCore import Qt
-from fileManager import FileManager
 
 
 class StartupDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.parent = parent
         self.setup_ui()
         self.file_path = None
 
@@ -56,7 +56,7 @@ class StartupDialog(QDialog):
         # Кнопка "Выход"
         self.exit_btn = QPushButton("Выход")
         self.exit_btn.setMinimumHeight(40)
-        self.exit_btn.clicked.connect(self.reject)
+        self.exit_btn.clicked.connect(lambda: self.parent.main_window.close())
 
         # Собираем layout
         buttons_layout.addWidget(self.create_btn)
@@ -72,13 +72,14 @@ class StartupDialog(QDialog):
         self.layout.addLayout(buttons_layout)
 
     def create_new_project(self):
-        file_manager = FileManager(self)
-        file_manager.create_new_project()
-        self.file_path = file_manager.file_path
-        self.done(1)
+        res = self.parent.new_project()
+        if res:
+            print(res)
+            self.done(1)
 
     def open_existing_project(self):
-        file_manager = FileManager(self)
-        file_manager.open_existing_project()
-        self.file_path = file_manager.file_path
-        self.done(2)
+        res = self.parent.open_project()
+        if res:
+            print(res)
+            self.done(2)
+

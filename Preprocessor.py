@@ -1,19 +1,21 @@
 from PyQt5.QtWidgets import (QPushButton, QLabel,
                              QVBoxLayout, QWidget,
                              QHBoxLayout, QMenu, QAction, QMessageBox)
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt,  QTimer
 from setConstruction import Dock_cunstraction
 from fileManager import FileManager
 import os
 import json
+from startMenu import StartupDialog
 
 
-class PreprocessorTab(QWidget):  # Наследуем от QWidget, а не от QVBoxLayout
+class PreprocessorTab(QWidget):  # Наследуем от QWidget
     def __init__(self, main_window, current_path_file):  # Принимаем главное окно как параметр
         super().__init__()
         self.main_window = main_window  # Сохраняем ссылку на главное окно
         self.current_path_file = current_path_file
         self.setupPreprocessor()
+        QTimer.singleShot(100, self.show_startup_dialog)
 
 
     def setupPreprocessor(self):
@@ -24,8 +26,6 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget, а не от
         middle_layout = QHBoxLayout()
         label = QLabel('Изображение')
         middle_layout.addWidget(label)
-
-
 
         self.FileButton = QPushButton('Файл')
         self.create_file_menu()
@@ -41,16 +41,28 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget, а не от
 
         top_layout.addWidget(self.toggle_dock_btn)
 
-
-
         mainPreProc_layout.addLayout(top_layout)
         mainPreProc_layout.addStretch(1)
 
         mainPreProc_layout.addLayout(middle_layout)
         mainPreProc_layout.addStretch(1)
 
-
         mainPreProc_layout.setAlignment(middle_layout, Qt.AlignCenter)
+
+    def show_startup_dialog(self):
+        """Показать стартовое диалоговое окно"""
+        dialog = StartupDialog(self)  # self как parent - важно для модальности
+        # Показываем диалог и ждем результат
+
+        result = dialog.exec_()  # ★ Блокирующий вызов - главное окно недоступно
+        self.file_path = dialog.file_path
+        # Обрабатываем результат
+        if result == 1:  # Создать новый проект
+            QMessageBox.information(self, "Успех", f"Проект создан")
+        elif result == 2:  # Открыть существующий проект
+            QMessageBox.information(self, "Успех", f"Проект открыт")
+        else:  # Отмена или закрытие (0)
+            self.close()  # Закрываем приложение
 
     def create_dock_menu(self):
         """Создаем выдвижное меню и добавляем его в главное окно"""
@@ -81,10 +93,8 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget, а не от
         save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.save_project)
 
-
         # Разделитель
         file_menu.addSeparator()
-
 
         # Разделитель
         file_menu.addSeparator()
@@ -103,19 +113,132 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget, а не от
 
         # Привязываем меню к кнопке
         self.FileButton.setMenu(file_menu)
+
     def new_project(self):
+        # Получаем путь для сохранения файла
         file_manager = FileManager(self)
-        file_manager.create_new_project()
-        self.current_path_file = file_manager.file_path
-        self.main_window.file_path = self.current_path_file
-        self.main_window.statusBar().showMessage("Новый проект создан", msecs=3000)
+        self.current_path_file = file_manager.create_new_project()
+
+        if self.current_path_file:  # Если пользователь выбрал путь (не нажал Cancel)
+            # Создаем файл (теперь используем режим 'w' вместо 'x')
+            try:
+                with open(self.current_path_file, 'w', encoding='utf-8') as f:
+                    # Записываем базовую структуру проекта
+                    basic_project = {
+                        "Objects": [
+                            {
+                                "Object": "bar",
+                                "quantity": "1",
+                                "list_of_values": [
+                                    {
+                                        "barNumber": "",
+                                        "length": "",
+                                        "cross_section": "",
+                                        "modulus_of_elasticity": "",
+                                        "pressure": ""
+                                    }
+                                ]
+                            },
+                            {
+                                "Object": "node_loads",
+                                "quantity": "1",
+                                "list_of_values": [
+                                    {
+                                        "node_number": "",
+                                        "force_value": ""
+                                    }
+                                ]
+                            },
+                            {
+                                "Object": "distributed_loads",
+                                "quantity": "1",
+                                "list_of_values": [
+                                    {
+                                        "bar_number": "",
+                                        "distributed_value": ""
+                                    }
+                                ]
+                            }
+                        ],
+                        "Left_support": 0,
+                        "Right_support": 0
+                    }
+                    json.dump(basic_project, f, indent=2, ensure_ascii=False)
+
+                # Устанавливаем путь в главном окне
+                self.main_window.file_path = self.current_path_file
+                self.main_window.statusBar().showMessage("Новый проект создан", 3000)
+
+                # ★★★ ОЧИЩАЕМ ТАБЛИЦЫ ДЛЯ НОВОГО ПРОЕКТА ★★★
+                self.dock_menu.barsTable.setRowCount(1)
+                self.dock_menu.concentratedLoadsTable.setRowCount(0)
+                self.dock_menu.distributedLoadTable.setRowCount(0)
+
+                # Очищаем заделки
+                self.dock_menu.left_seal_ChBox.setChecked(False)
+                self.dock_menu.right_seal_ChBox.setChecked(False)
+
+                return True
+
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка", f"Не удалось создать файл: {str(e)}")
+                return False
+        else:
+            # Пользователь нажал Cancel
+            return False
 
     def open_project(self):
         file_manager = FileManager(self)
-        file_manager.open_existing_project()
-        self.current_path_file = file_manager.file_path
+
+        self.current_path_file = file_manager.open_existing_project()
+        if self.current_path_file is None:
+            return False
         self.main_window.file_path = self.current_path_file
         self.main_window.statusBar().showMessage("Проект загружен", msecs=3000)
+        with open(self.main_window.file_path, 'r', encoding='utf-8') as file:
+            data = json.load(file)
+        print(self.validation_data(data))
+        if not self.validation_data(data):
+            QMessageBox.critical(self, "Ошибка", f"Данные в файле не корректны!")
+            return False
+        self.dock_menu.barsTable.setTableData(data)
+        self.dock_menu.concentratedLoadsTable.setTableData(data)
+        self.dock_menu.distributedLoadTable.setTableData(data)
+        return True
+
+    def validation_data(self, data):
+        try:
+            if (data['Objects'][0]['quantity'] == '') or (data['Objects'][0]['quantity'] == '0'):
+                return False
+            for bars in data['Objects'][0]['list_of_values']:
+                if bars['barNumber'] == "" or bars['length'] == "" or bars['cross_section'] == "" or bars['modulus_of_elasticity'] == "" or bars['pressure'] == "":
+                    return False
+            for node_loads in data['Objects'][1]['list_of_values']:
+                if node_loads['node_number'] == "" or node_loads['force_value'] == "":
+                    return False
+            for distributed_loads in data['Objects'][2]['list_of_values']:
+                if distributed_loads['bar_number'] == "" or distributed_loads['distributed_value'] == "":
+                    return False
+            for distributed_loads_values in data["Objects"][2]["list_of_values"]:
+                if (int(distributed_loads_values["bar_number"]) > data["Objects"][0]["quantity"]) or (int(distributed_loads_values["bar_number"]) <=0):
+                    return False
+            for distributed_loads_values in data["Objects"][1]["list_of_values"]:
+                if (int(distributed_loads_values["node_number"]) > data["Objects"][0]["quantity"]+1) or (int(distributed_loads_values["node_number"]) <= 0):
+                    return False
+            if int(data['Objects'][0]['quantity']) <= 0 or int(data['Objects'][1]['quantity']) < 0 or int(data['Objects'][2]['quantity']) < 0:
+                return False
+            if data['Left_support'] not in [0, 1] or data['Right_support'] not in [0, 1]:
+                return False
+            for bars in data['Objects'][0]['list_of_values']:
+                if int(bars['length']) <= 0 or int(bars['cross_section']) <= 0 or int(bars['modulus_of_elasticity']) <= 0 or int(bars['pressure']) <= 0:
+                    return False
+
+        except KeyError:
+            return False
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"{e}")
+            return False
+        return True
 
     def save_project(self):
         """Сохранить проект"""
@@ -138,6 +261,24 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget, а не от
             Objects.append(concentrated_data)
             Objects.append(distributed_data)
             data["Objects"] = Objects
+            if self.dock_menu.left_seal_ChBox.isChecked():
+                data["Left_support"] = 1
+            else:
+                data["Left_support"] = 0
+            if self.dock_menu.right_seal_ChBox.isChecked():
+                data["Right_support"] = 1
+            else:
+                data["Right_support"] = 0
+
+            for distributed_loads_values in data["Objects"][2]["list_of_values"]:
+                if int(distributed_loads_values["bar_number"]) > data["Objects"][0]["quantity"]:
+                    QMessageBox.critical(self, "Ошибка", f"Стерженя {distributed_loads_values["bar_number"]} не существует")
+                    return
+
+            for distributed_loads_values in data["Objects"][1]["list_of_values"]:
+                if int(distributed_loads_values["node_number"]) > data["Objects"][0]["quantity"]+1:
+                    QMessageBox.critical(self, "Ошибка", f"Узла {distributed_loads_values["node_number"]} не существует")
+                    return
 
             print("Данные для сохранения:", data)
             print("Путь файла:", self.main_window.file_path)
@@ -155,7 +296,6 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget, а не от
 
                 with open(self.main_window.file_path, 'w', encoding='utf-8') as file:
                     json.dump(data, file, ensure_ascii=False, indent=4)
-
 
                 print("Файл успешно сохранен!")
 

@@ -51,17 +51,13 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
 
     def show_startup_dialog(self):
         """Показать стартовое диалоговое окно"""
-        dialog = StartupDialog(self)  # self как parent - важно для модальности
+        dialog = StartupDialog(self)
         # Показываем диалог и ждем результат
 
-        result = dialog.exec_()  # ★ Блокирующий вызов - главное окно недоступно
+        result = dialog.exec_()
         self.file_path = dialog.file_path
         # Обрабатываем результат
-        if result == 1:  # Создать новый проект
-            QMessageBox.information(self, "Успех", f"Проект создан")
-        elif result == 2:  # Открыть существующий проект
-            QMessageBox.information(self, "Успех", f"Проект открыт")
-        else:  # Отмена или закрытие (0)
+        if result not in (1, 2):
             self.close()  # Закрываем приложение
 
     def create_dock_menu(self):
@@ -120,7 +116,7 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
         self.current_path_file = file_manager.create_new_project()
 
         if self.current_path_file:  # Если пользователь выбрал путь (не нажал Cancel)
-            # Создаем файл (теперь используем режим 'w' вместо 'x')
+            # Создаем файл
             try:
                 with open(self.current_path_file, 'w', encoding='utf-8') as f:
                     # Записываем базовую структуру проекта
@@ -131,33 +127,23 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
                                 "quantity": "1",
                                 "list_of_values": [
                                     {
-                                        "barNumber": "",
-                                        "length": "",
-                                        "cross_section": "",
-                                        "modulus_of_elasticity": "",
-                                        "pressure": ""
+                                        "barNumber": "1",
+                                        "length": "1",
+                                        "cross_section": "1",
+                                        "modulus_of_elasticity": "1",
+                                        "pressure": "1"
                                     }
                                 ]
                             },
                             {
                                 "Object": "node_loads",
-                                "quantity": "1",
-                                "list_of_values": [
-                                    {
-                                        "node_number": "",
-                                        "force_value": ""
-                                    }
-                                ]
+                                "quantity": "0",
+                                "list_of_values": []
                             },
                             {
                                 "Object": "distributed_loads",
-                                "quantity": "1",
-                                "list_of_values": [
-                                    {
-                                        "bar_number": "",
-                                        "distributed_value": ""
-                                    }
-                                ]
+                                "quantity": "0",
+                                "list_of_values": []
                             }
                         ],
                         "Left_support": 0,
@@ -167,16 +153,19 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
 
                 # Устанавливаем путь в главном окне
                 self.main_window.file_path = self.current_path_file
-                self.main_window.statusBar().showMessage("Новый проект создан", 3000)
+                self.main_window.set_window_title_with_file()
+                self.main_window.handle_new_project()
 
                 # ★★★ ОЧИЩАЕМ ТАБЛИЦЫ ДЛЯ НОВОГО ПРОЕКТА ★★★
                 self.dock_menu.barsTable.setRowCount(1)
                 self.dock_menu.concentratedLoadsTable.setRowCount(0)
                 self.dock_menu.distributedLoadTable.setRowCount(0)
+                self.dock_menu.barsTable.setTableData(basic_project)
 
                 # Очищаем заделки
                 self.dock_menu.left_seal_ChBox.setChecked(False)
                 self.dock_menu.right_seal_ChBox.setChecked(False)
+                QMessageBox.information(self, "Успех", f"Проект создан")
 
                 return True
 
@@ -189,25 +178,46 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
 
     def open_project(self):
         file_manager = FileManager(self)
-
         self.current_path_file = file_manager.open_existing_project()
         if self.current_path_file is None:
             return False
-        self.main_window.file_path = self.current_path_file
-        self.main_window.statusBar().showMessage("Проект загружен", msecs=3000)
-        with open(self.main_window.file_path, 'r', encoding='utf-8') as file:
+
+        with open(self.current_path_file, 'r', encoding='utf-8') as file:
             data = json.load(file)
-        print(self.validation_data(data))
+
         if not self.validation_data(data):
             QMessageBox.critical(self, "Ошибка", f"Данные в файле не корректны!")
             return False
+
+        # Загружаем данные в таблицы
         self.dock_menu.barsTable.setTableData(data)
         self.dock_menu.concentratedLoadsTable.setTableData(data)
         self.dock_menu.distributedLoadTable.setTableData(data)
+
+        # Устанавливаем путь и обновляем интерфейс
+        self.main_window.file_path = self.current_path_file
+        self.main_window.set_window_title_with_file()
+
+        # Устанавливаем статус "Проект сохранен"
+        self.main_window.set_project_saved_status(True)
+
+        # Показываем временное сообщение о загрузке
+        self.main_window.handle_open_project()
+        QMessageBox.information(self, "Успех", f"Проект открыт")
+
         return True
 
     def validation_data(self, data):
         try:
+            if not all(key in data for key in ['Objects', 'Left_support', 'Right_support']):
+                return False, "Отсутствуют обязательные поля"
+
+            if len(data['Objects']) != 3:
+                return False, "Неверное количество объектов"
+            for i in range(3):
+                print(i)
+                if int(data["Objects"][i]["quantity"]) != len(data["Objects"][i]["list_of_values"]):
+                    return False
             if (data['Objects'][0]['quantity'] == '') or (data['Objects'][0]['quantity'] == '0'):
                 return False
             for bars in data['Objects'][0]['list_of_values']:
@@ -298,17 +308,16 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
                     json.dump(data, file, ensure_ascii=False, indent=4)
 
                 print("Файл успешно сохранен!")
-
-                self.main_window.statusLabel.setText("Проект сохранен")
+                self.main_window.set_project_saved_status(True)
                 QMessageBox.information(self, "Успех", f"Файл сохранен:\n{self.main_window.file_path}")
+
 
             except PermissionError:
                 QMessageBox.critical(self, "Ошибка",
                                     f"Нет прав доступа к файлу.\n"
                                     f"Возможно файл открыт в другой программе.")
             except Exception as e:
-                QMessageBox.critical(self, "Ошибка",
-                                    f"Ошибка сохранения:\n{str(e)}")
+                QMessageBox.critical(self, "Ошибка", f"Ошибка сохранения:\n{str(e)}")
         else:
             QMessageBox.warning(self, "Ошибка", "Не все данные заполнены корректно!")
 

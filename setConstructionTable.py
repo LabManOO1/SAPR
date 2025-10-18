@@ -157,27 +157,40 @@ class ConstructionTable(QTableWidget):
             item.setText("")
 
     def setTableData(self, data):
-        if self.type == "bar":
-            self.setRowCount(int(data["Objects"][0]["quantity"]))
-            for list_of_values in data["Objects"][0]["list_of_values"]:
-                self.setItem(list_of_values["barNumber"] - 1, 0, QTableWidgetItem(str(list_of_values["length"])))
-                self.setItem(list_of_values["barNumber"] - 1, 1, QTableWidgetItem(str(list_of_values["cross_section"])))
-                self.setItem(list_of_values["barNumber"] - 1, 2, QTableWidgetItem(str(list_of_values["modulus_of_elasticity"])))
-                self.setItem(list_of_values["barNumber"] - 1, 3, QTableWidgetItem(str(list_of_values["pressure"])))
-        if self.type == "node_loads":
-            current_row = 0
-            self.setRowCount(int(data["Objects"][1]["quantity"]))
-            for list_of_values in data["Objects"][1]["list_of_values"]:
-                self.setItem(current_row, 0, QTableWidgetItem(str(list_of_values["node_number"])))
-                self.setItem(current_row, 1, QTableWidgetItem(str(list_of_values["force_value"])))
-                current_row += 1
-        if self.type == "distributed_loads":
-            current_row = 0
-            self.setRowCount(int(data["Objects"][2]["quantity"]))
-            for list_of_values in data["Objects"][2]["list_of_values"]:
-                self.setItem(current_row, 0, QTableWidgetItem(str(list_of_values["bar_number"])))
-                self.setItem(current_row, 1, QTableWidgetItem(str(list_of_values["distributed_value"])))
-                current_row += 1
+        try:
+            self.blockSignals(True)
+            if self.type == "bar":
+                self.setRowCount(int(data["Objects"][0]["quantity"]))
+                for list_of_values in data["Objects"][0]["list_of_values"]:
+                    bar_index = int(list_of_values["barNumber"]) - 1
+                    if 0 <= bar_index < self.rowCount():
+                        self.setItem(bar_index, 0, QTableWidgetItem(str(list_of_values["length"])))
+                        self.setItem(bar_index, 1, QTableWidgetItem(str(list_of_values["cross_section"])))
+                        self.setItem(bar_index, 2, QTableWidgetItem(str(list_of_values["modulus_of_elasticity"])))
+                        self.setItem(bar_index, 3, QTableWidgetItem(str(list_of_values["pressure"])))
+            if self.type == "node_loads":
+                current_row = 0
+                self.setRowCount(int(data["Objects"][1]["quantity"]))
+                for list_of_values in data["Objects"][1]["list_of_values"]:
+                    if 0 <= current_row < self.rowCount():
+                        self.setItem(current_row, 0, QTableWidgetItem(str(list_of_values["node_number"])))
+                        self.setItem(current_row, 1, QTableWidgetItem(str(list_of_values["force_value"])))
+                        current_row += 1
+            if self.type == "distributed_loads":
+                current_row = 0
+                self.setRowCount(int(data["Objects"][2]["quantity"]))
+                for list_of_values in data["Objects"][2]["list_of_values"]:
+                    if 0 <= current_row < self.rowCount():
+                        self.setItem(current_row, 0, QTableWidgetItem(str(list_of_values["bar_number"])))
+                        self.setItem(current_row, 1, QTableWidgetItem(str(list_of_values["distributed_value"])))
+                        current_row += 1
+        except (KeyError, ValueError, IndexError) as e:
+            print(f"Ошибка загрузки таблицы: {e}")
+            return False
+        finally:
+            # Всегда разблокируем сигналы, даже при ошибке
+            self.blockSignals(False)
+        return True
 
     def getTableData(self):
         """Получить данные таблицы в виде словаря"""

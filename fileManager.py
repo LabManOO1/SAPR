@@ -6,6 +6,21 @@ class FileManager(QFileDialog):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.file_path = None
+        self.create_project_directory()
+
+    @staticmethod
+    def ensure_extension(file_path, extension='.json'):
+        """Добавить расширение если отсутствует"""
+        if not file_path.endswith(extension):
+            return file_path + extension
+        return file_path
+
+    @staticmethod
+    def create_project_directory():
+        """Создать директорию проектов если не существует"""
+        projects_dir = os.path.join(os.getcwd(), "projects")
+        os.makedirs(projects_dir, exist_ok=True)
+        return projects_dir
 
     def create_new_project(self):
         """Обработчик создания нового проекта"""

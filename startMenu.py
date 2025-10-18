@@ -74,12 +74,10 @@ class StartupDialog(QDialog):
     def create_new_project(self):
         res = self.parent.new_project()
         if res:
-            print(res)
             self.done(1)
 
     def open_existing_project(self):
         res = self.parent.open_project()
         if res:
-            print(res)
             self.done(2)
 

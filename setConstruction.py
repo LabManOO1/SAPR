@@ -12,7 +12,6 @@ class Dock_cunstraction(QDockWidget):
         self.setupUI()
         self.setWindowTitle('Конструкция')
 
-
     def setupUI(self):
         self.setMinimumWidth(650)
 
@@ -128,4 +127,4 @@ class Dock_cunstraction(QDockWidget):
         self.setVisible(False)
 
     def on_table_item_changed(self):
-        self.mainWindow.statusLabel.setText("Проект не сохранен")
+        self.mainWindow.set_project_saved_status(False)

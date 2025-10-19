@@ -137,25 +137,25 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
                         "Objects": [
                             {
                                 "Object": "bar",
-                                "quantity": "1",
+                                "quantity": 1,
                                 "list_of_values": [
                                     {
-                                        "barNumber": "1",
-                                        "length": "1",
-                                        "cross_section": "1",
-                                        "modulus_of_elasticity": "1",
-                                        "pressure": "1"
+                                        "barNumber": 1,
+                                        "length": 1,
+                                        "cross_section": 1,
+                                        "modulus_of_elasticity": 1,
+                                        "pressure": 1
                                     }
                                 ]
                             },
                             {
                                 "Object": "node_loads",
-                                "quantity": "0",
+                                "quantity": 0,
                                 "list_of_values": []
                             },
                             {
                                 "Object": "distributed_loads",
-                                "quantity": "0",
+                                "quantity": 0,
                                 "list_of_values": []
                             }
                         ],
@@ -250,41 +250,87 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
             if data["Objects"][1].get("list_of_values") is None:
                 return False
 
-
             if len(data['Objects']) != 3:
-                return False, "Неверное количество объектов"
+                return False
+
+            # ПРЕОБРАЗУЕМ ВСЕ ЗНАЧЕНИЯ К ЧИСЛАМ ДЛЯ СРАВНЕНИЯ
+            left_support = int(data["Left_support"])
+            right_support = int(data["Right_support"])
+
             for i in range(3):
-                if int(data["Objects"][i]["quantity"]) != len(data["Objects"][i]["list_of_values"]):
-                    return False
-            if (data['Objects'][0]['quantity'] == '') or (data['Objects'][0]['quantity'] == '0'):
-                return False
-            for bars in data['Objects'][0]['list_of_values']:
-                if bars['barNumber'] == "" or bars['length'] == "" or bars['cross_section'] == "" or bars['modulus_of_elasticity'] == "" or bars['pressure'] == "":
-                    return False
-            for node_loads in data['Objects'][1]['list_of_values']:
-                if node_loads['node_number'] == "" or node_loads['force_value'] == "":
-                    return False
-            for distributed_loads in data['Objects'][2]['list_of_values']:
-                if distributed_loads['bar_number'] == "" or distributed_loads['distributed_value'] == "":
-                    return False
-            for distributed_loads_values in data["Objects"][2]["list_of_values"]:
-                if (int(distributed_loads_values["bar_number"]) > data["Objects"][0]["quantity"]) or (int(distributed_loads_values["bar_number"]) <=0):
-                    return False
-            for distributed_loads_values in data["Objects"][1]["list_of_values"]:
-                if (int(distributed_loads_values["node_number"]) > data["Objects"][0]["quantity"]+1) or (int(distributed_loads_values["node_number"]) <= 0):
-                    return False
-            if int(data['Objects'][0]['quantity']) <= 0 or int(data['Objects'][1]['quantity']) < 0 or int(data['Objects'][2]['quantity']) < 0:
-                return False
-            if data['Left_support'] not in [0, 1] or data['Right_support'] not in [0, 1]:
-                return False
-            for bars in data['Objects'][0]['list_of_values']:
-                if float(bars['length']) <= 0 or float(bars['cross_section']) <= 0 or float(bars['modulus_of_elasticity']) <= 0 or float(bars['pressure']) <= 0:
+                quantity = int(data["Objects"][i]["quantity"])
+                if quantity != len(data["Objects"][i]["list_of_values"]):
                     return False
 
-        except KeyError:
-            return False
-        except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"{e}")
+            if int(data['Objects'][0]['quantity']) == 0:
+                return False
+
+            for bars in data['Objects'][0]['list_of_values']:
+                # ПРЕОБРАЗУЕМ К ЧИСЛАМ
+                bar_number = int(bars['barNumber'])
+                length = float(bars['length'])
+                cross_section = float(bars['cross_section'])
+                modulus_of_elasticity = float(bars['modulus_of_elasticity'])
+                pressure = float(bars['pressure'])
+
+                if bar_number == 0 or length <= 0 or cross_section <= 0 or modulus_of_elasticity <= 0 or pressure <= 0:
+                    return False
+
+            for node_loads in data['Objects'][1]['list_of_values']:
+                # ПРЕОБРАЗУЕМ К ЧИСЛАМ
+                node_number = int(node_loads['node_number'])
+                force_value = float(node_loads['force_value'])
+
+                if node_number == 0 or force_value == 0:
+                    return False
+
+            for distributed_loads in data['Objects'][2]['list_of_values']:
+                # ПРЕОБРАЗУЕМ К ЧИСЛАМ
+                bar_number = int(distributed_loads['bar_number'])
+                distributed_value = float(distributed_loads['distributed_value'])
+
+                if bar_number == 0 or distributed_value == 0:
+                    return False
+
+            for distributed_loads_values in data["Objects"][2]["list_of_values"]:
+                # ПРЕОБРАЗУЕМ К ЧИСЛАМ
+                bar_number = int(distributed_loads_values["bar_number"])
+                total_bars = int(data["Objects"][0]["quantity"])
+
+                if (bar_number > total_bars) or (bar_number <= 0):
+                    return False
+
+            for node_loads_values in data["Objects"][1]["list_of_values"]:
+                # ПРЕОБРАЗУЕМ К ЧИСЛАМ
+                node_number = int(node_loads_values["node_number"])
+                total_nodes = int(data["Objects"][0]["quantity"]) + 1
+
+                if (node_number > total_nodes) or (node_number <= 0):
+                    return False
+
+            # ПРЕОБРАЗУЕМ К ЧИСЛАМ ДЛЯ СРАВНЕНИЯ
+            bars_quantity = int(data['Objects'][0]['quantity'])
+            node_loads_quantity = int(data['Objects'][1]['quantity'])
+            distributed_loads_quantity = int(data['Objects'][2]['quantity'])
+
+            if bars_quantity <= 0 or node_loads_quantity < 0 or distributed_loads_quantity < 0:
+                return False
+
+            if left_support not in [0, 1] or right_support not in [0, 1]:
+                return False
+
+            for bars in data['Objects'][0]['list_of_values']:
+                # ПРЕОБРАЗУЕМ К ЧИСЛАМ
+                length = float(bars['length'])
+                cross_section = float(bars['cross_section'])
+                modulus_of_elasticity = float(bars['modulus_of_elasticity'])
+                pressure = float(bars['pressure'])
+
+                if length <= 0 or cross_section <= 0 or modulus_of_elasticity <= 0 or pressure <= 0:
+                    return False
+
+        except (KeyError, ValueError, TypeError) as e:
+            print(f"Ошибка валидации: {e}")
             return False
         return True
 

@@ -40,50 +40,50 @@ class NodeGraphicsItem(QGraphicsItemGroup):
 
         self.text_item.setDefaultTextColor(QColor("#245AC7"))
 
+
 class LengthBarGraphicsItem(QGraphicsItemGroup):
-    def __init__(self, x1, x2,  y, length):
+    def __init__(self, x1, x2, y, length):
         super().__init__()
         self.line = QGraphicsLineItem(3, 0, x2 - 3, 0)
-        self.text_item = QGraphicsTextItem(length)
+
         self.length = length
+        if str(self.length)[-2:] == ".0":
+            self.length = int(str(self.length)[:-2])
+        self.text_item = QGraphicsTextItem(str(self.length))
 
         self.left_arrow_top = QGraphicsLineItem(2, 0, 8, -4)
         self.left_arrow_bottom = QGraphicsLineItem(2, 0, 8, 4)
-        self.right_arrow_top = QGraphicsLineItem(x2-2, 0, x2 - 8, -4)
-        self.right_arrow_bottom = QGraphicsLineItem(x2-2, 0, x2 - 8, 4)
+        self.right_arrow_top = QGraphicsLineItem(x2 - 2, 0, x2 - 8, -4)
+        self.right_arrow_bottom = QGraphicsLineItem(x2 - 2, 0, x2 - 8, 4)
 
         self.addToGroup(self.line)
         self.addToGroup(self.left_arrow_top)
         self.addToGroup(self.left_arrow_bottom)
         self.addToGroup(self.right_arrow_top)
         self.addToGroup(self.right_arrow_bottom)
+
         if float(length) < 1:
-            if len(self.length) == 1:
+            if len(str(self.length)) == 1:
                 self.addToGroup(self.text_item)
                 self.text_item.setPos(x2 / 2 - 8, -20)
-            if len(self.length) == 2:
+            if len(str(self.length)) == 2:
                 self.addToGroup(self.text_item)
                 self.text_item.setPos(x2 / 2 - 10, -20)
-            if len(self.length) == 3:
+            if len(str(self.length)) == 3:
                 self.addToGroup(self.text_item)
                 self.text_item.setPos(x2 / 2 - 13, -20)
-            if len(self.length) == 4:
+            if len(str(self.length)) == 4:
                 self.addToGroup(self.text_item)
                 self.text_item.setPos(x2 / 2 - 16, -20)
-            if len(self.length) == 5:
+            if len(str(self.length)) == 5:
                 self.addToGroup(self.text_item)
                 self.text_item.setPos(x2 / 2 - 19, -20)
-
         else:
-            x_ = (len(self.length) - 1) * 3 + 8
+            x_ = (len(str(self.length)) - 1) * 3 + 8
             self.addToGroup(self.text_item)
             self.text_item.setPos(x2 / 2 - x_, -20)
 
-
-
-        self.setPos(x1, y-2)
-
-        #self.setup_appearance()
+        self.setPos(x1, y - 2)
 
 
 class BarNumber(QGraphicsItemGroup):
@@ -182,23 +182,49 @@ class GridItem(QGraphicsItem):
 
 
 class NodeLoad(QGraphicsItemGroup):
-    def __init__(self, x, y, force_value, is_plus):
+    def __init__(self, x, y, force_value):
         super().__init__()
 
-        if is_plus:
-            main_lime = QGraphicsLineItem(0, 0, 20, 0)
-            arrow_top_line = QGraphicsLineItem(16, -3, 20, 0)
-            arrow_bot_line = QGraphicsLineItem(16, 3, 20, 0)
-            self.addToGroup(main_lime)
-            self.addToGroup(arrow_top_line)
-            self.addToGroup(arrow_bot_line)
-        else:
-            main_lime = QGraphicsLineItem(-20, 0, 0, 0)
-            arrow_top_line = QGraphicsLineItem(-16, -3, -20, 0)
-            arrow_bot_line = QGraphicsLineItem(-16, 3, -20, 0)
-            self.addToGroup(main_lime)
-            self.addToGroup(arrow_top_line)
-            self.addToGroup(arrow_bot_line)
+        x_main1 = 0
+        x_main2 = 20
+        x_top1 = 16
+        x_top2 = 20
+        y_top1 = -3
+        y_top2 = 3
+        x_text = 0
+
+        if force_value < 0:
+            x_main1 = -20
+            x_main2 = 0
+            x_top1 = -16
+            x_top2 = -20
+            y_top1 = -3
+            y_top2 = 3
+            x_text = -25
+        value = force_value
+        if len(str(force_value)) > 4:
+            value = "{:.1e}".format(value)
+
+        self.text_item = QGraphicsTextItem(f"{value}")
+        font = self.text_item.font()
+        font.setPointSize(6)  # Размер в пунктах
+        self.text_item.setFont(font)
+
+
+        main_lime = QGraphicsLineItem(x_main1, 0, x_main2, 0)
+        arrow_top_line = QGraphicsLineItem(x_top1, y_top1, x_top2, 0)
+        arrow_bot_line = QGraphicsLineItem(x_top1, y_top2, x_top2, 0)
+        main_lime.setPen(QPen(QColor("#C05"), 2))
+        arrow_top_line.setPen(QPen(QColor("#C05"), 2))
+        arrow_bot_line.setPen(QPen(QColor("#C05"), 2))
+        self.addToGroup(main_lime)
+        self.addToGroup(arrow_top_line)
+        self.addToGroup(arrow_bot_line)
+        self.addToGroup(self.text_item)
+        self.text_item.setPos(x_text, -17)
+
+
+
         self.setPos(x, y)
 
 
@@ -241,7 +267,6 @@ class ConstructionGraphicsView(QGraphicsView):
 
         if event.button() == Qt.MiddleButton:
             self.setDragMode(QGraphicsView.RubberBandDrag)
-            print(self.sceneRect())
         super().mouseReleaseEvent(event)
 
 
@@ -278,6 +303,7 @@ class ConstructionGraphicsManager:
         self.clear_construction()
 
         self.draw_bar(data)
+        self.draw_loads(data)
 
     def draw_bar(self, data):
         """Отрисовка стержней"""
@@ -291,21 +317,21 @@ class ConstructionGraphicsManager:
             return
         max_cross_section = 0
         for list_of_values in data["Objects"][0]["list_of_values"]:
-            if max_cross_section < float(list_of_values["cross_section"]):
-                max_cross_section = float(list_of_values["cross_section"])
+            if max_cross_section < list_of_values["cross_section"]:
+                max_cross_section = list_of_values["cross_section"]
         if max_cross_section > 10:
             max_cross_section = 10
 
 
         for list_of_values in data["Objects"][0]["list_of_values"]:
-            length_bar = float(list_of_values["length"])
+            length_bar = list_of_values["length"]
             if length_bar > 15:
                 length_bar = 15
-            if length_bar < 1:
-                length_bar = 1
+            if length_bar < 1.2:
+                length_bar = 1.2
 
-            cross_section = float(list_of_values["cross_section"])
-            if cross_section > 100:
+            cross_section = list_of_values["cross_section"]
+            if cross_section > 10:
                 cross_section = 10
             if cross_section < 0.2:
                 cross_section = 0.2
@@ -335,7 +361,7 @@ class ConstructionGraphicsManager:
                                                (max_cross_section / 2 * y_spacing) + 60)
                 self.scene.addItem(line)
                 node_item = NodeGraphicsItem(current_x * x_spacing + length_bar * x_spacing,
-                                             (max_cross_section / 2 * y_spacing) + 30, int(list_of_values["barNumber"])+1)
+                                             (max_cross_section / 2 * y_spacing) + 30, list_of_values["barNumber"]+1)
                 self.scene.addItem(node_item)
             current_x += length_bar
             first_bar = False
@@ -344,19 +370,19 @@ class ConstructionGraphicsManager:
         is_right_support = data["Right_support"]
         length_construction = 0
         for list_of_values in data["Objects"][0]["list_of_values"]:
-            length_construction += float(list_of_values["length"])
+            length_construction += list_of_values["length"]
         if is_left_support:
             left_support = SupportGraphicsItem(0, 0, True, max_cross_section * y_spacing + 20)
             self.scene.addItem(left_support)
         if is_right_support:
             length_construction = 0
             for list_of_values in data["Objects"][0]["list_of_values"]:
-                if float(list_of_values["length"]) > 15:
+                if list_of_values["length"] > 15:
                     length_construction += 15
-                elif float(list_of_values["length"]) < 1:
-                    length_construction += 1
+                elif list_of_values["length"] < 1.2:
+                    length_construction += 1.2
                 else:
-                    length_construction += float(list_of_values["length"])
+                    length_construction += list_of_values["length"]
             right_support = SupportGraphicsItem(length_construction * x_spacing, 0, False, max_cross_section * y_spacing + 20)
             self.scene.addItem(right_support)
 
@@ -378,9 +404,19 @@ class ConstructionGraphicsManager:
         x_spacing = 40
         y_spacing = 40
         for node_load in data["Objects"][1]["list_of_values"]:
-            node_number = int(node_load["node_number"])
+            node_number = node_load["node_number"]
+            x_ = 0
             for bar in data["Objects"][0]["list_of_values"]:
-                pass
+                if bar["barNumber"] < node_number:
+                    if bar["length"] > 15:
+                        x_ += 15 * x_spacing
+                    elif bar["length"] < 1.2:
+                        x_ += 1.2 * x_spacing
+                    else:
+                        x_ += bar["length"] * x_spacing
+            if node_number != 1:
+                load = NodeLoad(x_, 0, node_load["force_value"])
+                self.scene.addItem(load)
 
 
     def clear_construction(self):

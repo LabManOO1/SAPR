@@ -189,35 +189,54 @@ class ConstructionTable(QTableWidget):
         try:
             self.blockSignals(True)
             if self.type == "bar":
-                self.setRowCount(int(data["Objects"][0]["quantity"]))
+                quantity = data["Objects"][0]["quantity"]
+                if isinstance(quantity, str):
+                    quantity = int(quantity)
+                self.setRowCount(quantity)
+
                 for list_of_values in data["Objects"][0]["list_of_values"]:
-                    bar_index = int(list_of_values["barNumber"]) - 1
+
+                    bar_number = list_of_values["barNumber"]
+                    if isinstance(bar_number, str):
+                        bar_number = int(bar_number)
+                    bar_index = bar_number - 1
+
                     if 0 <= bar_index < self.rowCount():
                         self.setItem(bar_index, 0, QTableWidgetItem(str(list_of_values["length"])))
                         self.setItem(bar_index, 1, QTableWidgetItem(str(list_of_values["cross_section"])))
                         self.setItem(bar_index, 2, QTableWidgetItem(str(list_of_values["modulus_of_elasticity"])))
                         self.setItem(bar_index, 3, QTableWidgetItem(str(list_of_values["pressure"])))
+
             if self.type == "node_loads":
+                quantity = data["Objects"][1]["quantity"]
+                if isinstance(quantity, str):
+                    quantity = int(quantity)
+                self.setRowCount(quantity)
+
                 current_row = 0
-                self.setRowCount(int(data["Objects"][1]["quantity"]))
                 for list_of_values in data["Objects"][1]["list_of_values"]:
                     if 0 <= current_row < self.rowCount():
                         self.setItem(current_row, 0, QTableWidgetItem(str(list_of_values["node_number"])))
                         self.setItem(current_row, 1, QTableWidgetItem(str(list_of_values["force_value"])))
                         current_row += 1
+
             if self.type == "distributed_loads":
+                quantity = data["Objects"][2]["quantity"]
+                if isinstance(quantity, str):
+                    quantity = int(quantity)
+                self.setRowCount(quantity)
+
                 current_row = 0
-                self.setRowCount(int(data["Objects"][2]["quantity"]))
                 for list_of_values in data["Objects"][2]["list_of_values"]:
                     if 0 <= current_row < self.rowCount():
                         self.setItem(current_row, 0, QTableWidgetItem(str(list_of_values["bar_number"])))
                         self.setItem(current_row, 1, QTableWidgetItem(str(list_of_values["distributed_value"])))
                         current_row += 1
+
         except (KeyError, ValueError, IndexError) as e:
             print(f"Ошибка загрузки таблицы: {e}")
             return False
         finally:
-            # Всегда разблокируем сигналы, даже при ошибке
             self.blockSignals(False)
         return True
 
@@ -228,6 +247,7 @@ class ConstructionTable(QTableWidget):
         list_of_values = []
         f = True
         rowsCount = self.rowCount()
+
         if (self.type == "bar") and (self.rowCount() == 0):
             f = False
 
@@ -237,11 +257,26 @@ class ConstructionTable(QTableWidget):
                 if all([self.item(row, 0), self.item(row, 1), self.item(row, 2), self.item(row, 3)]):
                     row_data = dict()
                     row_data["barNumber"] = row + 1
-                    row_data["length"] = float(self.item(row, 0).text())
-                    row_data["cross_section"] = float(self.item(row, 1).text())
-                    row_data["modulus_of_elasticity"] = float(self.item(row, 2).text())
-                    row_data["pressure"] = float(self.item(row, 3).text())
-                    list_of_values.append(row_data)
+
+                    # ПРЕОБРАЗУЕМ В ЧИСЛА, НО ПРОВЕРЯЕМ НА ПУСТОТУ
+                    try:
+                        length_text = self.item(row, 0).text().strip()
+                        cross_section_text = self.item(row, 1).text().strip()
+                        modulus_text = self.item(row, 2).text().strip()
+                        pressure_text = self.item(row, 3).text().strip()
+
+                        if not all([length_text, cross_section_text, modulus_text, pressure_text]):
+                            f = False
+                            continue
+
+                        row_data["length"] = float(length_text) if length_text else 0
+                        row_data["cross_section"] = float(cross_section_text) if cross_section_text else 0
+                        row_data["modulus_of_elasticity"] = float(modulus_text) if modulus_text else 0
+                        row_data["pressure"] = float(pressure_text) if pressure_text else 0
+
+                        list_of_values.append(row_data)
+                    except ValueError:
+                        f = False
                 else:
                     f = False
             data["list_of_values"] = list_of_values
@@ -251,9 +286,21 @@ class ConstructionTable(QTableWidget):
             for row in range(self.rowCount()):
                 if self.item(row, 0) and self.item(row, 1):
                     row_data = dict()
-                    row_data["node_number"] = float(self.item(row, 0).text())
-                    row_data["force_value"] = float(self.item(row, 1).text())
-                    list_of_values.append(row_data)
+
+                    try:
+                        node_text = self.item(row, 0).text().strip()
+                        force_text = self.item(row, 1).text().strip()
+
+                        if not all([node_text, force_text]):
+                            f = False
+                            continue
+
+                        row_data["node_number"] = int(node_text) if node_text else 0
+                        row_data["force_value"] = float(force_text) if force_text else 0
+
+                        list_of_values.append(row_data)
+                    except ValueError:
+                        f = False
                 else:
                     f = False
             data["list_of_values"] = list_of_values
@@ -263,12 +310,25 @@ class ConstructionTable(QTableWidget):
             for row in range(self.rowCount()):
                 if self.item(row, 0) and self.item(row, 1):
                     row_data = dict()
-                    row_data["bar_number"] = float(self.item(row, 0).text())
-                    row_data["distributed_value"] = float(self.item(row, 1).text())
-                    list_of_values.append(row_data)
+
+                    try:
+                        bar_text = self.item(row, 0).text().strip()
+                        distributed_text = self.item(row, 1).text().strip()
+
+                        if not all([bar_text, distributed_text]):
+                            f = False
+                            continue
+
+                        row_data["bar_number"] = int(bar_text) if bar_text else 0
+                        row_data["distributed_value"] = float(distributed_text) if distributed_text else 0
+
+                        list_of_values.append(row_data)
+                    except ValueError:
+                        f = False
                 else:
                     f = False
             data["list_of_values"] = list_of_values
+
         if f:
             return data
         else:

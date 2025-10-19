@@ -17,6 +17,7 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
         self.current_path_file = current_path_file
         self.graphics_manager = ConstructionGraphicsManager()
         self.setupPreprocessor()
+        self.current_data = None
         QTimer.singleShot(100, self.show_startup_dialog)
 
 
@@ -36,6 +37,7 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
 
         # СОЗДАЕМ ВЫДВИЖНОЕ МЕНЮ
         self.create_dock_menu()
+        self.connect_table_signals()
 
         # Кнопка для показа/скрытия меню (в тулбаре)
         self.toggle_dock_btn = QPushButton("Показать/скрыть настройки конструкции")
@@ -162,6 +164,9 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
                     }
                     json.dump(basic_project, f, indent=2, ensure_ascii=False)
 
+                self.current_data = basic_project
+                print(self.current_data)
+
                 # Устанавливаем путь в главном окне
                 self.main_window.file_path = self.current_path_file
                 self.main_window.set_window_title_with_file()
@@ -192,9 +197,12 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
         self.current_path_file = file_manager.open_existing_project()
         if self.current_path_file is None:
             return False
+        try:
+            with open(self.current_path_file, 'r', encoding='utf-8') as file:
+                data = json.load(file)
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"{e}")
 
-        with open(self.current_path_file, 'r', encoding='utf-8') as file:
-            data = json.load(file)
 
         if not self.validation_data(data):
             QMessageBox.critical(self, "Ошибка", f"Данные в файле не корректны!")
@@ -209,6 +217,9 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
 
         if data["Right_support"] == 1:
             self.dock_menu.right_seal_ChBox.setChecked(True)
+
+        self.current_data = data
+        print(self.current_data)
 
         # Устанавливаем путь и обновляем интерфейс
         self.main_window.file_path = self.current_path_file
@@ -227,12 +238,22 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
     def validation_data(self, data):
         try:
             if not all(key in data for key in ['Objects', 'Left_support', 'Right_support']):
-                return False, "Отсутствуют обязательные поля"
+                return False
+            if not all(key in data["Objects"][0] for key in ['Object', 'quantity', 'list_of_values']):
+                return False
+            if not all(key in data["Objects"][1] for key in ['Object', 'quantity', 'list_of_values']):
+                return False
+            if not all(key in data["Objects"][2] for key in ['Object', 'quantity', 'list_of_values']):
+                return False
+            if data["Objects"][0].get("list_of_values") is None:
+                return False
+            if data["Objects"][1].get("list_of_values") is None:
+                return False
+
 
             if len(data['Objects']) != 3:
                 return False, "Неверное количество объектов"
             for i in range(3):
-                print(i)
                 if int(data["Objects"][i]["quantity"]) != len(data["Objects"][i]["list_of_values"]):
                     return False
             if (data['Objects'][0]['quantity'] == '') or (data['Objects'][0]['quantity'] == '0'):
@@ -257,7 +278,7 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
             if data['Left_support'] not in [0, 1] or data['Right_support'] not in [0, 1]:
                 return False
             for bars in data['Objects'][0]['list_of_values']:
-                if int(bars['length']) <= 0 or int(bars['cross_section']) <= 0 or int(bars['modulus_of_elasticity']) <= 0 or int(bars['pressure']) <= 0:
+                if float(bars['length']) <= 0 or float(bars['cross_section']) <= 0 or float(bars['modulus_of_elasticity']) <= 0 or float(bars['pressure']) <= 0:
                     return False
 
         except KeyError:
@@ -267,13 +288,7 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
             return False
         return True
 
-    def save_project(self):
-        """Сохранить проект"""
-        # Проверяем, есть ли путь к файлу
-        if not self.main_window.file_path:
-            QMessageBox.warning(self, "Ошибка", "Сначала создайте или откройте проект")
-            return
-
+    def get_data(self):
         data = {}
         Objects = []
 
@@ -296,40 +311,90 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
                 data["Right_support"] = 1
             else:
                 data["Right_support"] = 0
+            return data
 
-            if not self.validation_data(data):
-                return False
-
-            print("Данные для сохранения:", data)
-            print("Путь файла:", self.main_window.file_path)
-
-            try:
-                # Проверка и создание директории
-                directory = os.path.dirname(self.main_window.file_path)
-                if directory and not os.path.exists(directory):
-                    os.makedirs(directory)
-
-                # Проверка прав доступа
-                if directory and not os.access(directory, os.W_OK):
-                    QMessageBox.critical(self, "Ошибка", f"Нет прав на запись в директорию: {directory}")
-                    return
-
-                with open(self.main_window.file_path, 'w', encoding='utf-8') as file:
-                    json.dump(data, file, ensure_ascii=False, indent=4)
-
-                print("Файл успешно сохранен!")
-                self.main_window.set_project_saved_status(True)
-                QMessageBox.information(self, "Успех", f"Файл сохранен:\n{self.main_window.file_path}")
+        else:
+            return False
 
 
-            except PermissionError:
-                QMessageBox.critical(self, "Ошибка",
+    def save_project(self):
+        """Сохранить проект"""
+        # Проверяем, есть ли путь к файлу
+        if not self.main_window.file_path:
+            QMessageBox.warning(self, "Ошибка", "Сначала создайте или откройте проект")
+            return
+
+        data = self.get_data()
+        if not data:
+            QMessageBox.warning(self, "Ошибка", "Не все данные заполнены корректно!")
+            return False
+
+        if not self.validation_data(data):
+            QMessageBox.warning(self, "Ошибка", "Не все данные заполнены корректно!")
+            return False
+
+        print("Данные для сохранения:", data)
+        print("Путь файла:", self.main_window.file_path)
+
+        try:
+            # Проверка и создание директории
+            directory = os.path.dirname(self.main_window.file_path)
+            if directory and not os.path.exists(directory):
+                os.makedirs(directory)
+
+            # Проверка прав доступа
+            if directory and not os.access(directory, os.W_OK):
+                QMessageBox.critical(self, "Ошибка", f"Нет прав на запись в директорию: {directory}")
+                return
+
+            with open(self.main_window.file_path, 'w', encoding='utf-8') as file:
+                json.dump(data, file, ensure_ascii=False, indent=4)
+
+            print("Файл успешно сохранен!")
+            self.main_window.set_project_saved_status(True)
+            QMessageBox.information(self, "Успех", f"Файл сохранен:\n{self.main_window.file_path}")
+
+
+        except PermissionError:
+            QMessageBox.critical(self, "Ошибка",
                                     f"Нет прав доступа к файлу.\n"
                                     f"Возможно файл открыт в другой программе.")
-            except Exception as e:
-                QMessageBox.critical(self, "Ошибка", f"Ошибка сохранения:\n{str(e)}")
-        else:
-            QMessageBox.warning(self, "Ошибка", "Не все данные заполнены корректно!")
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Ошибка сохранения:\n{str(e)}")
+
+    def connect_table_signals(self):
+        """Подключение сигналов для отслеживания изменений в таблицах"""
+        # Подключаем сигналы изменения данных в таблицах
+        self.dock_menu.barsTable.itemChanged.connect(self.on_construction_data_changed)
+        self.dock_menu.concentratedLoadsTable.itemChanged.connect(self.on_construction_data_changed)
+        self.dock_menu.distributedLoadTable.itemChanged.connect(self.on_construction_data_changed)
+
+        # Подключаем сигналы чекбоксов заделок
+        self.dock_menu.left_seal_ChBox.stateChanged.connect(self.on_construction_data_changed)
+        self.dock_menu.right_seal_ChBox.stateChanged.connect(self.on_construction_data_changed)
+
+    def on_construction_data_changed(self):
+        """Вызывается при изменении данных в таблицах или заделках"""
+        if self.dock_menu.barsTable.rowCount() == 0:
+            self.graphics_manager.draw_construction(None)
+            self.dock_menu.barsTable.setRowCount(0)
+            self.main_window.set_project_saved_status(False)
+        try:
+            # Получаем актуальные данные из таблиц
+            data = self.get_data()
+            if data and self.validation_data(data):
+                # Обновляем текущие данные
+                self.current_data = data
+
+                # Обновляем графическое отображение
+                self.graphics_manager.draw_construction(data)
+
+                # Устанавливаем статус "не сохранено"
+                self.main_window.set_project_saved_status(False)
+
+        except Exception as e:
+            print(f"Ошибка при обновлении графики: {e}")
+
 
     def close_application(self):
         reply = QMessageBox.question(self, "Выход",
@@ -337,3 +402,4 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
                                      QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
             self.main_window.close()
+

@@ -1,17 +1,6 @@
 from PyQt5.QtWidgets import QMessageBox, QTableWidget, QHeaderView, QItemDelegate, QLineEdit, QTableWidgetItem
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QDoubleValidator, QIntValidator, QValidator
-
-
-class EmptyAllowedValidator(QValidator):
-    def __init__(self, base_validator, parent=None):
-        super().__init__(parent)
-        self.base_validator = base_validator
-
-    def validate(self, text, pos):
-        if text.strip() == "":
-            return QValidator.Acceptable, text, pos
-        return self.base_validator.validate(text, pos)
+from PyQt5.QtCore import Qt, QRegExp
+from PyQt5.QtGui import QDoubleValidator, QIntValidator, QValidator, QRegExpValidator
 
 
 class NumericDelegate(QItemDelegate):
@@ -27,45 +16,71 @@ class NumericDelegate(QItemDelegate):
             validator = QIntValidator()
             if self.is_plus:
                 validator.setBottom(0)
-            editor.setValidator(EmptyAllowedValidator(validator))
+            editor.setValidator(validator)
         else:
-            validator = QDoubleValidator()
             if self.is_plus:
-                validator.setBottom(0.0)
-            validator.setNotation(QDoubleValidator.StandardNotation)
-            editor.setValidator(EmptyAllowedValidator(validator))
+                # Для положительных чисел: цифры, точка, запятая
+                regex = QRegExp(r"^\d*[,.]?\d*$")
+            else:
+                # Для любых чисел: цифры, точка, запятая, знак минуса
+                regex = QRegExp(r"^-?\d*[,.]?\d*$")
+
+            validator = QRegExpValidator(regex)
+            editor.setValidator(validator)
+
+            editor.textChanged.connect(lambda text: self.on_text_changed(editor, text))
 
         return editor
 
+    def on_text_changed(self, editor, text):
+        """Автоматически заменяем запятую на точку"""
+        if ',' in text:
+            new_text = text.replace(',', '.')
+            editor.setText(new_text)
+            editor.setCursorPosition(len(new_text))
+        if text[-1] == '.':
+            text += "0"
 
     def setModelData(self, editor, model, index):
         """Сохраняем данные из редактора в модель"""
         text = editor.text().strip()
 
+
         # Разрешаем пустые значения
         if text == "":
             model.setData(index, "", Qt.EditRole)
+            return
+
+        # Заменяем запятую на точку для корректного преобразования
+        text = text.replace(',', '.')
+        if text[-1] == '.':
+            text += "0"
+        if text == "0" or text == "0.0":
+            text = "1"
+        if text == ".0":
+            text = "1"
+        if text[0] == ".":
+            text = text.replace(".", "")
+
+        # Проверяем валидность
+        if self.is_integer:
+            try:
+                value = int(text)
+                if self.is_plus and value < 0:
+                    model.setData(index, "", Qt.EditRole)
+                else:
+                    model.setData(index, str(value), Qt.EditRole)
+            except ValueError:
+                model.setData(index, "", Qt.EditRole)
         else:
-            # Проверяем валидность только если текст не пустой
-            if self.is_integer:
-                try:
-                    value = int(text)
-                    if self.is_plus and value < 0:
-                        # Если требуется положительное число, но введено отрицательное
-                        model.setData(index, "", Qt.EditRole)
-                    else:
-                        model.setData(index, text, Qt.EditRole)
-                except ValueError:
+            try:
+                value = float(text)
+                if self.is_plus and value < 0:
                     model.setData(index, "", Qt.EditRole)
-            else:
-                try:
-                    value = float(text)
-                    if self.is_plus and value < 0:
-                        model.setData(index, "", Qt.EditRole)
-                    else:
-                        model.setData(index, text, Qt.EditRole)
-                except ValueError:
-                    model.setData(index, "", Qt.EditRole)
+                else:
+                    model.setData(index, text, Qt.EditRole)  # Сохраняем с точкой
+            except ValueError:
+                model.setData(index, "", Qt.EditRole)
 
 class ConstructionTable(QTableWidget):
     def __init__(self, type, columnCount, headers, rowCount=0, data=None, parent=None):
@@ -123,6 +138,7 @@ class ConstructionTable(QTableWidget):
             self.removeRow(0)
             self.clearSelection()
             self.setCurrentCell(-1, -1)
+            self.emit_data_changed_signal()
             return
 
         current_row = self.currentRow()
@@ -133,6 +149,19 @@ class ConstructionTable(QTableWidget):
         self.removeRow(current_row)
         self.clearSelection()
         self.setCurrentCell(-1, -1)
+        self.emit_data_changed_signal()
+
+    def emit_data_changed_signal(self):
+        """Генерирует сигнал об изменении данных"""
+        # Создаем фиктивный QTableWidgetItem и эмитируем сигнал
+        if self.rowCount() > 0:
+            # Используем первую ячейку для генерации сигнала
+            fake_item = QTableWidgetItem()
+            self.itemChanged.emit(fake_item)
+        else:
+            # Если таблица пустая, все равно генерируем сигнал
+            fake_item = QTableWidgetItem()
+            self.itemChanged.emit(fake_item)
 
     def keyPressEvent(self, event):
         """Обработка клавиш с разными действиями"""
@@ -208,10 +237,10 @@ class ConstructionTable(QTableWidget):
                 if all([self.item(row, 0), self.item(row, 1), self.item(row, 2), self.item(row, 3)]):
                     row_data = dict()
                     row_data["barNumber"] = row + 1
-                    row_data["length"] = self.item(row, 0).text()
-                    row_data["cross_section"] = self.item(row, 1).text()
-                    row_data["modulus_of_elasticity"] = self.item(row, 2).text()
-                    row_data["pressure"] = self.item(row, 3).text()
+                    row_data["length"] = float(self.item(row, 0).text())
+                    row_data["cross_section"] = float(self.item(row, 1).text())
+                    row_data["modulus_of_elasticity"] = float(self.item(row, 2).text())
+                    row_data["pressure"] = float(self.item(row, 3).text())
                     list_of_values.append(row_data)
                 else:
                     f = False
@@ -222,8 +251,8 @@ class ConstructionTable(QTableWidget):
             for row in range(self.rowCount()):
                 if self.item(row, 0) and self.item(row, 1):
                     row_data = dict()
-                    row_data["node_number"] = self.item(row, 0).text()
-                    row_data["force_value"] = self.item(row, 1).text()
+                    row_data["node_number"] = float(self.item(row, 0).text())
+                    row_data["force_value"] = float(self.item(row, 1).text())
                     list_of_values.append(row_data)
                 else:
                     f = False
@@ -234,8 +263,8 @@ class ConstructionTable(QTableWidget):
             for row in range(self.rowCount()):
                 if self.item(row, 0) and self.item(row, 1):
                     row_data = dict()
-                    row_data["bar_number"] = self.item(row, 0).text()
-                    row_data["distributed_value"] = self.item(row, 1).text()
+                    row_data["bar_number"] = float(self.item(row, 0).text())
+                    row_data["distributed_value"] = float(self.item(row, 1).text())
                     list_of_values.append(row_data)
                 else:
                     f = False

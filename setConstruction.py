@@ -22,7 +22,6 @@ class Dock_cunstraction(QDockWidget):
 
         # Добавляем таблицу (Стержни)
         self.barsTable = ConstructionTable("bar", 4, ['Длина, L', 'Поперечное сечение, A', 'Модуль упругости, Е', 'Напряжение, σ'], parent=self.mainWindow)
-        self.barsTable.itemChanged.connect(self.on_table_item_changed)
 
         barsTableTitle = QLabel('Стержни')
         barsTableTitle.setAlignment(Qt.AlignCenter)
@@ -48,7 +47,6 @@ class Dock_cunstraction(QDockWidget):
         # Добавляем таблицу (Сосредоточенные нагрузки)
 
         self.concentratedLoadsTable = ConstructionTable("node_loads", 2, ['Номер узла', 'Значение, F'], parent=self.mainWindow)
-        self.concentratedLoadsTable.itemChanged.connect(self.on_table_item_changed)
 
         concLoadsTableTitle = QLabel('Сосредоточенные нагрузки')
         concLoadsTableTitle.setAlignment(Qt.AlignCenter)
@@ -72,7 +70,6 @@ class Dock_cunstraction(QDockWidget):
         # Добавляем таблицу (Распределенные нагрузки)
 
         self.distributedLoadTable = ConstructionTable("distributed_loads", 2, ['Номер стержня', 'Значение, q'], parent=self.mainWindow)
-        self.distributedLoadTable.itemChanged.connect(self.on_table_item_changed)
 
         distrLoadsTableTitle = QLabel('Распределенные нагрузки')
         distrLoadsTableTitle.setAlignment(Qt.AlignCenter)
@@ -127,5 +124,3 @@ class Dock_cunstraction(QDockWidget):
         # Скрываем меню по умолчанию
         self.setVisible(False)
 
-    def on_table_item_changed(self):
-        self.mainWindow.set_project_saved_status(False)

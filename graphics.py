@@ -1,7 +1,8 @@
 from PyQt5.QtWidgets import (QGraphicsScene, QGraphicsView, QGraphicsLineItem,
-                             QGraphicsEllipseItem, QGraphicsTextItem, QToolBar, QAction, QGraphicsRectItem, QGraphicsItemGroup, QGraphicsItem, QGraphicsPixmapItem)
+                             QGraphicsEllipseItem, QGraphicsTextItem, QToolBar, QAction, QGraphicsRectItem,
+                             QGraphicsItemGroup, QGraphicsItem, QGraphicsPixmapItem, QGridLayout)
 from PyQt5.QtCore import Qt, QRectF, QSize
-from PyQt5.QtGui import QPen, QBrush, QColor, QPainter, QPixmap
+from PyQt5.QtGui import QPen, QBrush, QColor, QPainter, QPixmap, QMouseEvent
 
 
 class BarGraphicsItem(QGraphicsRectItem):
@@ -44,6 +45,7 @@ class LengthBarGraphicsItem(QGraphicsItemGroup):
         super().__init__()
         self.line = QGraphicsLineItem(3, 0, x2 - 3, 0)
         self.text_item = QGraphicsTextItem(length)
+        self.length = length
 
         self.left_arrow_top = QGraphicsLineItem(2, 0, 8, -4)
         self.left_arrow_bottom = QGraphicsLineItem(2, 0, 8, 4)
@@ -51,14 +53,33 @@ class LengthBarGraphicsItem(QGraphicsItemGroup):
         self.right_arrow_bottom = QGraphicsLineItem(x2-2, 0, x2 - 8, 4)
 
         self.addToGroup(self.line)
-        self.addToGroup(self.text_item)
         self.addToGroup(self.left_arrow_top)
         self.addToGroup(self.left_arrow_bottom)
         self.addToGroup(self.right_arrow_top)
         self.addToGroup(self.right_arrow_bottom)
+        if float(length) < 1:
+            if len(self.length) == 1:
+                self.addToGroup(self.text_item)
+                self.text_item.setPos(x2 / 2 - 8, -20)
+            if len(self.length) == 2:
+                self.addToGroup(self.text_item)
+                self.text_item.setPos(x2 / 2 - 10, -20)
+            if len(self.length) == 3:
+                self.addToGroup(self.text_item)
+                self.text_item.setPos(x2 / 2 - 13, -20)
+            if len(self.length) == 4:
+                self.addToGroup(self.text_item)
+                self.text_item.setPos(x2 / 2 - 16, -20)
+            if len(self.length) == 5:
+                self.addToGroup(self.text_item)
+                self.text_item.setPos(x2 / 2 - 19, -20)
+
+        else:
+            x_ = (len(self.length) - 1) * 3 + 8
+            self.addToGroup(self.text_item)
+            self.text_item.setPos(x2 / 2 - x_, -20)
 
 
-        self.text_item.setPos(x2/2-8, -20)
 
         self.setPos(x1, y-2)
 
@@ -83,14 +104,14 @@ class BarNumber(QGraphicsItemGroup):
 
 
 class SupportGraphicsItem(QGraphicsItemGroup):
-    def __init__(self, x, y, is_left_support=True, height=60, support_width=15):
+    def __init__(self, x, y, is_left_support=True, height=60):
         super().__init__()
 
         self.x = x
         self.y = y
         self.height = height
         self.is_left_support = is_left_support
-        self.support_width = support_width
+        self.support_width = self.height/10
 
         self.create_support()
         self.setPos(x, y)
@@ -99,7 +120,7 @@ class SupportGraphicsItem(QGraphicsItemGroup):
         """Создает графическое представление заделки"""
 
         # Основная вертикальная полоса (стенка)
-        main_line = QGraphicsLineItem(0, -self.height/2, 0, self.height/2)
+        main_line = QGraphicsLineItem(0, -self.height / 2, 0, self.height / 2)
         main_line.setPen(QPen(Qt.black, 3))
         self.addToGroup(main_line)
 
@@ -109,20 +130,80 @@ class SupportGraphicsItem(QGraphicsItemGroup):
 
     def create_hatching(self):
         """Создает штриховку в зависимости от типа заделки"""
-        num_hatches = 6  # Количество штрихов
-        hatch_spacing = self.height / (num_hatches)
+        hatch_spacing = self.height // 6
+        num_hatches = int(self.height // hatch_spacing)
+        y_ = self.height/9
+
 
         for i in range(num_hatches):
             y_pos = i * hatch_spacing
             if self.is_left_support:
                 # Штрихи справа от основной линии
-                hatch = QGraphicsLineItem(-self.support_width, -self.height/2 + y_pos + 15, 0, -self.height/2 + y_pos)
+                hatch = QGraphicsLineItem(-self.support_width, -self.height/2 + y_pos + y_, 0, -self.height/2 + y_pos)
             else:
                 # Штрихи слева от основной линии
-                hatch = QGraphicsLineItem(0, -self.height/2 + y_pos + 15, self.support_width, -self.height/2 + y_pos)
+                hatch = QGraphicsLineItem(0, -self.height/2 + y_pos + y_, self.support_width, -self.height/2 + y_pos)
 
             hatch.setPen(QPen(Qt.black, 2))
             self.addToGroup(hatch)
+
+
+
+
+class GridItem(QGraphicsItem):
+    def __init__(self, grid_size=20):
+        super().__init__()
+        self.grid_size = grid_size
+        self.setFlag(QGraphicsItem.ItemDoesntPropagateOpacityToChildren)
+
+    def boundingRect(self):
+        return QRectF(-10000, -10000, 20000, 20000)
+
+    def paint(self, painter, option, widget):
+
+        pen = QPen(QColor("#f5f3f0"))
+        pen.setWidth(0)
+        painter.setPen(pen)
+
+        left = -10000
+        top = -10000
+        right = 10000
+        bottom = 10000
+
+        x = left
+        while x <= right:
+            painter.drawLine(x, top, x, bottom)
+            x += self.grid_size
+
+        y = top
+        while y <= bottom:
+            painter.drawLine(left, y, right, y)
+            y += self.grid_size
+
+
+class NodeLoad(QGraphicsItemGroup):
+    def __init__(self, x, y, force_value, is_plus):
+        super().__init__()
+
+        if is_plus:
+            main_lime = QGraphicsLineItem(0, 0, 20, 0)
+            arrow_top_line = QGraphicsLineItem(16, -3, 20, 0)
+            arrow_bot_line = QGraphicsLineItem(16, 3, 20, 0)
+            self.addToGroup(main_lime)
+            self.addToGroup(arrow_top_line)
+            self.addToGroup(arrow_bot_line)
+        else:
+            main_lime = QGraphicsLineItem(-20, 0, 0, 0)
+            arrow_top_line = QGraphicsLineItem(-16, -3, -20, 0)
+            arrow_bot_line = QGraphicsLineItem(-16, 3, -20, 0)
+            self.addToGroup(main_lime)
+            self.addToGroup(arrow_top_line)
+            self.addToGroup(arrow_bot_line)
+        self.setPos(x, y)
+
+
+
+
 
 
 class ConstructionGraphicsView(QGraphicsView):
@@ -133,8 +214,7 @@ class ConstructionGraphicsView(QGraphicsView):
     def setup_view(self):
         self.setRenderHint(QPainter.Antialiasing)
         self.setDragMode(QGraphicsView.ScrollHandDrag)
-        self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
-        self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
+        self.setDragMode(QGraphicsView.RubberBandDrag)
 
     def wheelEvent(self, event):
         """Масштабирование колесом мыши"""
@@ -146,6 +226,25 @@ class ConstructionGraphicsView(QGraphicsView):
         else:
             self.scale(zoom_out_factor, zoom_out_factor)
 
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MiddleButton:
+            self.setDragMode(QGraphicsView.ScrollHandDrag)
+            fake_event = QMouseEvent(
+                event.type(), event.localPos(), event.screenPos(),
+                Qt.LeftButton, Qt.LeftButton, event.modifiers()
+            )
+            super().mousePressEvent(fake_event)
+        else:
+            super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+
+        if event.button() == Qt.MiddleButton:
+            self.setDragMode(QGraphicsView.RubberBandDrag)
+            print(self.sceneRect())
+        super().mouseReleaseEvent(event)
+
+
 
 class ConstructionGraphicsManager:
     def __init__(self):
@@ -155,23 +254,24 @@ class ConstructionGraphicsManager:
 
     def setup_graphics(self):
         # Настройка сцены
-        self.scene.setSceneRect(-500, -500, 1000, 1000)
         self.scene.setBackgroundBrush(QBrush(QColor(250, 250, 250)))
 
         # Рисуем сетку
-        #self.draw_grid()
+        self.draw_grid()
 
     def draw_grid(self, spacing=10):
-        """Отрисовка сетки"""
-        pen = QPen(QColor(220, 220, 220), 1)
-
-        # Вертикальные линии
-        for x in range(-1000, 1001, spacing):
-            self.scene.addLine(x, -1000, x, 1000, pen)
-
-        # Горизонтальные линии
-        for y in range(-1000, 1001, spacing):
-            self.scene.addLine(-1000, y, 1000, y, pen)
+        grid = GridItem(10)
+        self.scene.addItem(grid)
+        # """Отрисовка сетки"""
+        # pen = QPen(QColor(220, 220, 220), 1)
+        #
+        # # Вертикальные линии
+        # for x in range(-1000, 1001, spacing):
+        #     self.scene.addLine(x, -1000, x, 1000, pen)
+        #
+        # # Горизонтальные линии
+        # for y in range(-1000, 1001, spacing):
+        #     self.scene.addLine(-1000, y, 1000, y, pen)
 
     def draw_construction(self, data):
         """Отрисовка стержней и сил"""
@@ -181,62 +281,86 @@ class ConstructionGraphicsManager:
 
     def draw_bar(self, data):
         """Отрисовка стержней"""
+        #self.draw_grid()
         x_spacing = 40
         y_spacing = 40
         current_x = 0
         first_bar = True
+        if not data:
+            self.clear_construction()
+            return
         max_cross_section = 0
         for list_of_values in data["Objects"][0]["list_of_values"]:
-            if max_cross_section < int(list_of_values["cross_section"]):
-                max_cross_section = int(list_of_values["cross_section"])
+            if max_cross_section < float(list_of_values["cross_section"]):
+                max_cross_section = float(list_of_values["cross_section"])
+        if max_cross_section > 10:
+            max_cross_section = 10
 
 
         for list_of_values in data["Objects"][0]["list_of_values"]:
-            bar_item = BarGraphicsItem(current_x * x_spacing, -int(list_of_values["cross_section"])/2 * y_spacing, int(list_of_values["length"]) * x_spacing, int(list_of_values["cross_section"]) * y_spacing, list_of_values["barNumber"])
+            length_bar = float(list_of_values["length"])
+            if length_bar > 15:
+                length_bar = 15
+            if length_bar < 1:
+                length_bar = 1
+
+            cross_section = float(list_of_values["cross_section"])
+            if cross_section > 100:
+                cross_section = 10
+            if cross_section < 0.2:
+                cross_section = 0.2
+            bar_item = BarGraphicsItem(current_x * x_spacing, -cross_section/2 * y_spacing, length_bar * x_spacing, cross_section * y_spacing, list_of_values["barNumber"])
             self.scene.addItem(bar_item)
 
-            bar_number = BarNumber(current_x * x_spacing + (int(list_of_values["length"]) * x_spacing)/2, int(list_of_values["cross_section"])/2 * y_spacing + 15, int(list_of_values["barNumber"]))
+            bar_number = BarNumber(current_x * x_spacing + (length_bar * x_spacing)/2, cross_section/2 * y_spacing + 15, int(list_of_values["barNumber"]))
             self.scene.addItem(bar_number)
 
-            LengthBarLine = LengthBarGraphicsItem(current_x * x_spacing, int(list_of_values["length"]) * x_spacing, (max_cross_section / 2 * y_spacing) + 60, list_of_values["length"])
+            LengthBarLine = LengthBarGraphicsItem(current_x * x_spacing, length_bar * x_spacing, (max_cross_section / 2 * y_spacing) + 60, list_of_values["length"])
             self.scene.addItem(LengthBarLine)
             if first_bar:
-                left_line = QGraphicsLineItem(0, int(list_of_values["cross_section"])/2 * y_spacing ,0 , (max_cross_section/2 * y_spacing) + 60)
-                right_line = QGraphicsLineItem(current_x * x_spacing + int(list_of_values["length"]) * x_spacing, int(list_of_values["cross_section"]) / 2 * y_spacing, current_x * x_spacing + int(list_of_values["length"]) * x_spacing,
+                left_line = QGraphicsLineItem(0, cross_section/2 * y_spacing ,0 , (max_cross_section/2 * y_spacing) + 60)
+                right_line = QGraphicsLineItem(current_x * x_spacing + length_bar * x_spacing, cross_section / 2 * y_spacing, current_x * x_spacing + length_bar * x_spacing,
                                               (max_cross_section / 2 * y_spacing) + 60)
                 self.scene.addItem(left_line)
                 self.scene.addItem(right_line)
 
                 left_node_item = NodeGraphicsItem(0, (max_cross_section/2 * y_spacing) + 30, 1)
-                right_node_item = NodeGraphicsItem(current_x * x_spacing + int(list_of_values["length"]) * x_spacing, (max_cross_section / 2 * y_spacing) + 30, 2)
+                right_node_item = NodeGraphicsItem(current_x * x_spacing + length_bar * x_spacing, (max_cross_section / 2 * y_spacing) + 30, 2)
                 self.scene.addItem(left_node_item)
                 self.scene.addItem(right_node_item)
             else:
-                line = QGraphicsLineItem(current_x * x_spacing + int(list_of_values["length"]) * x_spacing,
-                                               int(list_of_values["cross_section"]) / 2 * y_spacing,
-                                               current_x * x_spacing + int(list_of_values["length"]) * x_spacing,
+                line = QGraphicsLineItem(current_x * x_spacing + length_bar * x_spacing,
+                                               cross_section / 2 * y_spacing,
+                                               current_x * x_spacing + length_bar * x_spacing,
                                                (max_cross_section / 2 * y_spacing) + 60)
                 self.scene.addItem(line)
-                node_item = NodeGraphicsItem(current_x * x_spacing + int(list_of_values["length"]) * x_spacing,
+                node_item = NodeGraphicsItem(current_x * x_spacing + length_bar * x_spacing,
                                              (max_cross_section / 2 * y_spacing) + 30, int(list_of_values["barNumber"])+1)
                 self.scene.addItem(node_item)
-            current_x += int(list_of_values["length"])
+            current_x += length_bar
             first_bar = False
 
         is_left_support = data["Left_support"]
         is_right_support = data["Right_support"]
         length_construction = 0
         for list_of_values in data["Objects"][0]["list_of_values"]:
-            length_construction += int(list_of_values["length"])
+            length_construction += float(list_of_values["length"])
         if is_left_support:
             left_support = SupportGraphicsItem(0, 0, True, max_cross_section * y_spacing + 20)
             self.scene.addItem(left_support)
         if is_right_support:
             length_construction = 0
             for list_of_values in data["Objects"][0]["list_of_values"]:
-                length_construction += int(list_of_values["length"])
+                if float(list_of_values["length"]) > 15:
+                    length_construction += 15
+                elif float(list_of_values["length"]) < 1:
+                    length_construction += 1
+                else:
+                    length_construction += float(list_of_values["length"])
             right_support = SupportGraphicsItem(length_construction * x_spacing, 0, False, max_cross_section * y_spacing + 20)
             self.scene.addItem(right_support)
+
+        self.center_on_constucrion((length_construction * x_spacing)/2)
 
 
 
@@ -246,28 +370,18 @@ class ConstructionGraphicsManager:
         # text_item.setDefaultTextColor(Qt.darkBlue)
         # self.scene.addItem(text_item)
 
-    def draw_nodes_and_supports(self, bars_count, supports_data):
-        """Отрисовка узлов и заделок"""
-        x_spacing = 100
+    def center_on_constucrion(self, x):
+        self.view.centerOn(x, 0)
 
-        for i in range(bars_count + 1):
-            x = i * x_spacing
-            y = 0
+    def draw_loads(self, data):
+        """Отрисовка нагрузок"""
+        x_spacing = 40
+        y_spacing = 40
+        for node_load in data["Objects"][1]["list_of_values"]:
+            node_number = int(node_load["node_number"])
+            for bar in data["Objects"][0]["list_of_values"]:
+                pass
 
-            # Определяем тип узла (обычный или заделка)
-            is_left_support = (i == 0 and supports_data.get('left_support', False))
-            is_right_support = (i == bars_count and supports_data.get('right_support', False))
-            is_support = is_left_support or is_right_support
-
-            node_item = NodeGraphicsItem(x, y, i + 1, is_support)
-            self.scene.addItem(node_item)
-
-            # Подпись узла
-            support_text = " (заделка)" if is_support else ""
-            text_item = QGraphicsTextItem(f"Узел {i + 1}{support_text}")
-            text_item.setPos(x - 15, y + 15)
-            text_item.setDefaultTextColor(Qt.darkGreen)
-            self.scene.addItem(text_item)
 
     def clear_construction(self):
         """Очистка сцены"""

@@ -7,6 +7,7 @@ from fileManager import FileManager
 import os
 import json
 from startMenu import StartupDialog
+from graphics import ConstructionGraphicsManager
 
 
 class PreprocessorTab(QWidget):  # Наследуем от QWidget
@@ -14,6 +15,7 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
         super().__init__()
         self.main_window = main_window  # Сохраняем ссылку на главное окно
         self.current_path_file = current_path_file
+        self.graphics_manager = ConstructionGraphicsManager()
         self.setupPreprocessor()
         QTimer.singleShot(100, self.show_startup_dialog)
 
@@ -24,8 +26,8 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
         top_layout = QHBoxLayout()
 
         middle_layout = QHBoxLayout()
-        label = QLabel('Изображение')
-        middle_layout.addWidget(label)
+        graphics_widget = self.create_graphics_widget()
+        middle_layout.addWidget(graphics_widget)
 
         self.FileButton = QPushButton('Файл')
         self.create_file_menu()
@@ -48,6 +50,15 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
         mainPreProc_layout.addStretch(1)
 
         mainPreProc_layout.setAlignment(middle_layout, Qt.AlignCenter)
+
+    def create_graphics_widget(self):
+        """Создание виджета с графикой конструкции"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        layout.addWidget(self.graphics_manager.view)
+
+        return widget
 
     def show_startup_dialog(self):
         """Показать стартовое диалоговое окно"""
@@ -193,6 +204,11 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
         self.dock_menu.barsTable.setTableData(data)
         self.dock_menu.concentratedLoadsTable.setTableData(data)
         self.dock_menu.distributedLoadTable.setTableData(data)
+        if data["Left_support"] == 1:
+            self.dock_menu.left_seal_ChBox.setChecked(True)
+
+        if data["Right_support"] == 1:
+            self.dock_menu.right_seal_ChBox.setChecked(True)
 
         # Устанавливаем путь и обновляем интерфейс
         self.main_window.file_path = self.current_path_file
@@ -204,6 +220,7 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
         # Показываем временное сообщение о загрузке
         self.main_window.handle_open_project()
         QMessageBox.information(self, "Успех", f"Проект открыт")
+        self.graphics_manager.draw_construction(data)
 
         return True
 
@@ -280,15 +297,8 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
             else:
                 data["Right_support"] = 0
 
-            for distributed_loads_values in data["Objects"][2]["list_of_values"]:
-                if int(distributed_loads_values["bar_number"]) > data["Objects"][0]["quantity"]:
-                    QMessageBox.critical(self, "Ошибка", f"Стерженя {distributed_loads_values["bar_number"]} не существует")
-                    return
-
-            for distributed_loads_values in data["Objects"][1]["list_of_values"]:
-                if int(distributed_loads_values["node_number"]) > data["Objects"][0]["quantity"]+1:
-                    QMessageBox.critical(self, "Ошибка", f"Узла {distributed_loads_values["node_number"]} не существует")
-                    return
+            if not self.validation_data(data):
+                return False
 
             print("Данные для сохранения:", data)
             print("Путь файла:", self.main_window.file_path)

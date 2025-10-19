@@ -9,6 +9,7 @@ class Dock_cunstraction(QDockWidget):
     def __init__(self, parent=None):
         super().__init__(parent=parent)  # Используем современный синтаксис
         self.mainWindow = parent
+
         self.setupUI()
         self.setWindowTitle('Конструкция')
 

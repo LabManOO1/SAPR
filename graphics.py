@@ -184,6 +184,8 @@ class GridItem(QGraphicsItem):
 class NodeLoad(QGraphicsItemGroup):
     def __init__(self, x, y, force_value):
         super().__init__()
+        if str(force_value)[-2:] == ".0":
+            force_value = int(str(force_value)[:-2])
 
         x_main1 = 0
         x_main2 = 20
@@ -202,7 +204,7 @@ class NodeLoad(QGraphicsItemGroup):
             y_top2 = 3
             x_text = -25
         value = force_value
-        if len(str(force_value)) > 4:
+        if len(str(value)) > 4:
             value = "{:.1e}".format(value)
 
         self.text_item = QGraphicsTextItem(f"{value}")
@@ -220,13 +222,95 @@ class NodeLoad(QGraphicsItemGroup):
         self.addToGroup(main_lime)
         self.addToGroup(arrow_top_line)
         self.addToGroup(arrow_bot_line)
+        self.text_item.setDefaultTextColor(QColor("#C05"))
         self.addToGroup(self.text_item)
-        self.text_item.setPos(x_text, -17)
+        x_ = 0
+        if len(str(value)) > 3:
+            x_ = (len(str(value)) - 1) * 2
+        if force_value < 0:
+            self.text_item.setPos(x_text - x_, -19)
+        else:
+            self.text_item.setPos(x_text, -19)
 
 
 
         self.setPos(x, y)
 
+
+class DistributedLoad(QGraphicsItemGroup):
+    def __init__(self, x1, x2, length, value):
+        super().__init__()
+        count_arrow = 4
+        current_x = 0
+        self.length = length
+        if self.length > 15:
+            self.length = 15
+        if self.length < 1.2:
+            self.length = 1.2
+        spacing = 5
+        self.value = value
+        if str(self.value)[-2:] == ".0":
+            self.value = int(str(self.value)[:-2])
+
+
+        length_arrow = 15
+        if self.length < 2:
+            length_arrow = (self.length * 40) / 5.3
+            spacing = (self.length * 40) / 16
+            for i in range(count_arrow):
+
+                main_arrow = QGraphicsLineItem(current_x, 0, current_x + length_arrow, 0)
+                main_arrow.setPen(QPen(QColor("#245AC7"), 1))
+                if self.value > 0:
+                    top_arrow = QGraphicsLineItem(current_x + length_arrow - 4, -3, current_x + length_arrow, 0)
+                    top_arrow.setPen(QPen(QColor("#245AC7"), 1))
+                    self.addToGroup(top_arrow)
+                    bot_arrow = QGraphicsLineItem(current_x + length_arrow - 4, 3, current_x + length_arrow, 0)
+                    bot_arrow.setPen(QPen(QColor("#245AC7"), 1))
+                    self.addToGroup(bot_arrow)
+                else:
+                    top_arrow = QGraphicsLineItem(current_x, 0, current_x + 4, -3)
+                    top_arrow.setPen(QPen(QColor("#245AC7"), 1))
+                    self.addToGroup(top_arrow)
+                    bot_arrow = QGraphicsLineItem(current_x, 0, current_x + 4, 3)
+                    bot_arrow.setPen(QPen(QColor("#245AC7"), 1))
+                    self.addToGroup(bot_arrow)
+                self.addToGroup(main_arrow)
+                current_x += length_arrow + spacing
+        else:
+            while (current_x + length_arrow  < self.length * 40):
+                main_arrow = QGraphicsLineItem(current_x, 0, current_x + length_arrow, 0)
+                main_arrow.setPen(QPen(QColor("#245AC7"), 1))
+                self.addToGroup(main_arrow)
+                if self.value > 0:
+                    top_arrow = QGraphicsLineItem(current_x + length_arrow - 4, -3, current_x + length_arrow, 0)
+                    top_arrow.setPen(QPen(QColor("#245AC7"), 1))
+                    self.addToGroup(top_arrow)
+                    bot_arrow = QGraphicsLineItem(current_x + length_arrow - 4, 3, current_x + length_arrow, 0)
+                    bot_arrow.setPen(QPen(QColor("#245AC7"), 1))
+                    self.addToGroup(bot_arrow)
+                else:
+                    top_arrow = QGraphicsLineItem(current_x, 0, current_x + 4, -3)
+                    top_arrow.setPen(QPen(QColor("#245AC7"), 1))
+                    self.addToGroup(top_arrow)
+                    bot_arrow = QGraphicsLineItem(current_x, 0, current_x + 4, 3)
+                    bot_arrow.setPen(QPen(QColor("#245AC7"), 1))
+                    self.addToGroup(bot_arrow)
+                current_x += length_arrow + spacing
+        if len(str(self.value)) > 4:
+            self.value = "{:.2e}".format(self.value)
+        self.text_item = QGraphicsTextItem(f"{self.value}")
+        font = self.text_item.font()
+        font.setPointSize(6)  # Размер в пунктах
+        self.text_item.setFont(font)
+        self.setPos(x1, 0)
+        x_ = 5
+        if len(str(self.value)) != 1:
+            x_ = (len(str(self.value)) - 1) * 3
+        self.text_item.setDefaultTextColor(QColor("#245AC7"))
+        self.addToGroup(self.text_item)
+
+        self.text_item.setPos(length * 40 / 2 - x_, 2)
 
 
 
@@ -236,6 +320,7 @@ class ConstructionGraphicsView(QGraphicsView):
     def __init__(self, scene):
         super().__init__(scene)
         self.setup_view()
+        self.x_ = None
 
     def setup_view(self):
         self.setRenderHint(QPainter.Antialiasing)
@@ -251,6 +336,12 @@ class ConstructionGraphicsView(QGraphicsView):
             self.scale(zoom_in_factor, zoom_in_factor)
         else:
             self.scale(zoom_out_factor, zoom_out_factor)
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Space:
+            self.resetTransform()
+            self.centerOn(self.x_, 0)
+        else:
+            super().keyPressEvent(event)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MiddleButton:
@@ -301,9 +392,9 @@ class ConstructionGraphicsManager:
     def draw_construction(self, data):
         """Отрисовка стержней и сил"""
         self.clear_construction()
-
-        self.draw_bar(data)
         self.draw_loads(data)
+        self.draw_bar(data)
+
 
     def draw_bar(self, data):
         """Отрисовка стержней"""
@@ -387,6 +478,7 @@ class ConstructionGraphicsManager:
             self.scene.addItem(right_support)
 
         self.center_on_constucrion((length_construction * x_spacing)/2)
+        self.view.x_ = (length_construction * x_spacing)/2
 
 
 
@@ -403,6 +495,24 @@ class ConstructionGraphicsManager:
         """Отрисовка нагрузок"""
         x_spacing = 40
         y_spacing = 40
+
+        max_node = data["Objects"][0]["quantity"] + 1
+
+        for distributed_load in data["Objects"][2]["list_of_values"]:
+            current_x = 0
+            for bar in data["Objects"][0]["list_of_values"]:
+                length = bar["length"]
+                if length > 15:
+                    length = 15
+                if length < 1.2:
+                    length = 1.2
+                if distributed_load["bar_number"] == bar["barNumber"]:
+                    distrload = DistributedLoad(current_x, current_x + length * 40, length, distributed_load["distributed_value"])
+                    self.scene.addItem(distrload)
+
+                current_x += length * 40
+
+
         for node_load in data["Objects"][1]["list_of_values"]:
             node_number = node_load["node_number"]
             x_ = 0
@@ -414,9 +524,12 @@ class ConstructionGraphicsManager:
                         x_ += 1.2 * x_spacing
                     else:
                         x_ += bar["length"] * x_spacing
-            if node_number != 1:
+            if not ((node_number == 1  and data["Left_support"] == 1) or (node_number == max_node and data["Right_support"] == 1)):
                 load = NodeLoad(x_, 0, node_load["force_value"])
                 self.scene.addItem(load)
+
+
+
 
 
     def clear_construction(self):

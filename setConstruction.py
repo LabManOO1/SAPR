@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QVBoxLayout, QWidget,
                              QDockWidget, QPushButton, QHBoxLayout, QLabel,
-                             QCheckBox)
+                             QCheckBox, QMessageBox)
 from PyQt5.QtCore import Qt
 from setConstructionTable import ConstructionTable
 
@@ -21,7 +21,8 @@ class Dock_cunstraction(QDockWidget):
         dock_layout = QVBoxLayout(dock_content)
 
         # Добавляем таблицу (Стержни)
-        self.barsTable = ConstructionTable("bar", 4, ['Длина, L', 'Поперечное сечение, A', 'Модуль упругости, Е', 'Напряжение, σ'], parent=self.mainWindow)
+        self.barsTable = ConstructionTable("bar", 4, ['Длина, L', 'Поперечное сечение, A', 'Модуль упругости, Е',
+                                                      'Напряжение, σ'], parent=self.mainWindow)
 
         barsTableTitle = QLabel('Стержни')
         barsTableTitle.setAlignment(Qt.AlignCenter)
@@ -32,7 +33,7 @@ class Dock_cunstraction(QDockWidget):
         addBar = QPushButton('Добавить')
         remBar = QPushButton('Удалить')
         addBar.clicked.connect(self.barsTable.add_row)
-        remBar.clicked.connect(self.barsTable.remove_selected_row)
+        remBar.clicked.connect(self.remove_bar_with_loads)  # Изменено на новый метод
         addBar.setFixedSize(170, 30)
         remBar.setFixedSize(170, 30)
         barsLayout.addWidget(addBar)
@@ -43,10 +44,10 @@ class Dock_cunstraction(QDockWidget):
         # Добавляем таблицы (нагрузки)
         LoadLayout = QHBoxLayout()
 
-
         # Добавляем таблицу (Сосредоточенные нагрузки)
 
-        self.concentratedLoadsTable = ConstructionTable("node_loads", 2, ['Номер узла', 'Значение, F'], parent=self.mainWindow)
+        self.concentratedLoadsTable = ConstructionTable("node_loads", 2, ['Номер узла', 'Значение, F'],
+                                                        parent=self.mainWindow)
 
         concLoadsTableTitle = QLabel('Сосредоточенные нагрузки')
         concLoadsTableTitle.setAlignment(Qt.AlignCenter)
@@ -69,7 +70,8 @@ class Dock_cunstraction(QDockWidget):
 
         # Добавляем таблицу (Распределенные нагрузки)
 
-        self.distributedLoadTable = ConstructionTable("distributed_loads", 2, ['Номер стержня', 'Значение, q'], parent=self.mainWindow)
+        self.distributedLoadTable = ConstructionTable("distributed_loads", 2, ['Номер стержня', 'Значение, q'],
+                                                      parent=self.mainWindow)
 
         distrLoadsTableTitle = QLabel('Распределенные нагрузки')
         distrLoadsTableTitle.setAlignment(Qt.AlignCenter)
@@ -124,3 +126,26 @@ class Dock_cunstraction(QDockWidget):
         # Скрываем меню по умолчанию
         self.setVisible(False)
 
+    def remove_bar_with_loads(self):
+        """Удалить стержень и все связанные с ним нагрузки"""
+        if self.barsTable.rowCount() == 0:
+            QMessageBox.information(self, "Информация", "Таблица пустая")
+            return
+
+        current_row = self.barsTable.currentRow()
+        if current_row < 0:
+            QMessageBox.information(self, "Информация", "Выберите строку для удаления")
+            return
+
+        # Получаем номер удаляемого стержня
+        bar_number = current_row + 1
+
+        # Удаляем стержень и связанные нагрузки через PreprocessorTab
+        preprocessor_tab = self.mainWindow.preprocessor_tab
+        preprocessor_tab.remove_bar_with_related_loads(bar_number)
+
+        # Удаляем сам стержень из таблицы
+        self.barsTable.removeRow(current_row)
+        self.barsTable.clearSelection()
+        self.barsTable.setCurrentCell(-1, -1)
+        self.barsTable.emit_data_changed_signal()

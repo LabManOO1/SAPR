@@ -45,7 +45,6 @@ class NumericDelegate(QItemDelegate):
         """Сохраняем данные из редактора в модель"""
         text = editor.text().strip()
 
-
         # Разрешаем пустые значения
         if text == "":
             model.setData(index, "", Qt.EditRole)
@@ -81,6 +80,7 @@ class NumericDelegate(QItemDelegate):
                     model.setData(index, text, Qt.EditRole)  # Сохраняем с точкой
             except ValueError:
                 model.setData(index, "", Qt.EditRole)
+
 
 class ConstructionTable(QTableWidget):
     def __init__(self, type, columnCount, headers, rowCount=0, data=None, parent=None):
@@ -134,12 +134,6 @@ class ConstructionTable(QTableWidget):
         if self.rowCount() == 0:
             QMessageBox.information(self, "Информация", "Таблица пустая")
             return
-        if self.rowCount() == 1:
-            self.removeRow(0)
-            self.clearSelection()
-            self.setCurrentCell(-1, -1)
-            self.emit_data_changed_signal()
-            return
 
         current_row = self.currentRow()
         if current_row < 0:
@@ -150,6 +144,54 @@ class ConstructionTable(QTableWidget):
         self.clearSelection()
         self.setCurrentCell(-1, -1)
         self.emit_data_changed_signal()
+
+    def remove_related_loads(self, bar_number, concentrated_loads_table, distributed_loads_table):
+        """Удалить нагрузки, связанные с удаляемым стержнем"""
+        # Удаляем распределенные нагрузки для этого стержня
+        self.remove_distributed_loads(bar_number, distributed_loads_table)
+
+        # Удаляем сосредоточенные нагрузки для узлов этого стержня
+        self.remove_node_loads(bar_number, concentrated_loads_table)
+
+    def remove_distributed_loads(self, bar_number, distributed_loads_table):
+        """Удалить распределенные нагрузки для указанного стержня"""
+        rows_to_remove = []
+
+        for row in range(distributed_loads_table.rowCount()):
+            item = distributed_loads_table.item(row, 0)
+            if item and item.text().strip():
+                try:
+                    load_bar_number = int(item.text().strip())
+                    if load_bar_number == bar_number:
+                        rows_to_remove.append(row)
+                except ValueError:
+                    continue
+
+        # Удаляем строки в обратном порядке, чтобы индексы не сбивались
+        for row in sorted(rows_to_remove, reverse=True):
+            distributed_loads_table.removeRow(row)
+
+    def remove_node_loads(self, bar_number, concentrated_loads_table):
+        """Удалить сосредоточенные нагрузки для узлов указанного стержня"""
+        # У стержня с номером bar_number есть два узла: bar_number и bar_number + 1
+        node1 = bar_number
+        node2 = bar_number + 1
+
+        rows_to_remove = []
+
+        for row in range(concentrated_loads_table.rowCount()):
+            item = concentrated_loads_table.item(row, 0)
+            if item and item.text().strip():
+                try:
+                    load_node_number = int(item.text().strip())
+                    if load_node_number == node1 or load_node_number == node2:
+                        rows_to_remove.append(row)
+                except ValueError:
+                    continue
+
+        # Удаляем строки в обратном порядке, чтобы индексы не сбивались
+        for row in sorted(rows_to_remove, reverse=True):
+            concentrated_loads_table.removeRow(row)
 
     def emit_data_changed_signal(self):
         """Генерирует сигнал об изменении данных"""

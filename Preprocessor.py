@@ -1,7 +1,8 @@
 from PyQt5.QtWidgets import (QPushButton, QLabel,
                              QVBoxLayout, QWidget,
-                             QHBoxLayout, QMenu, QAction, QMessageBox)
+                             QHBoxLayout, QMenu, QAction, QMessageBox, QCheckBox)
 from PyQt5.QtCore import Qt, QTimer
+
 from setConstruction import Dock_cunstraction
 from fileManager import FileManager
 import os
@@ -44,11 +45,30 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
 
         top_layout.addWidget(self.toggle_dock_btn)
 
+        bottom_layout = QHBoxLayout()
+        self.draw_grid_checkbox = QCheckBox()
+        self.draw_grid_checkbox.stateChanged.connect(self.on_construction_data_changed)
+        paint_grid_text = QLabel("Сетка")
+
+        self.loads_checkbox = QCheckBox()
+        self.loads_checkbox.setChecked(True)
+        self.loads_checkbox.stateChanged.connect(self.on_construction_data_changed)
+
+        loads_text = QLabel("Нагрузки")
+
+        bottom_layout.addWidget(self.draw_grid_checkbox)
+        bottom_layout.addWidget(paint_grid_text)
+        bottom_layout.addWidget(self.loads_checkbox)
+        bottom_layout.addWidget(loads_text)
+        bottom_layout.addStretch(1)
+
         mainPreProc_layout.addLayout(top_layout)
         mainPreProc_layout.addStretch(1)
 
         mainPreProc_layout.addLayout(middle_layout)
         mainPreProc_layout.addStretch(1)
+
+        mainPreProc_layout.addLayout(bottom_layout)
 
         mainPreProc_layout.setAlignment(middle_layout, Qt.AlignCenter)
 
@@ -140,10 +160,10 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
                                 "list_of_values": [
                                     {
                                         "barNumber": 1,
-                                        "length": 1,
-                                        "cross_section": 1,
-                                        "modulus_of_elasticity": 1,
-                                        "pressure": 1
+                                        "length": 1.0,
+                                        "cross_section": 1.0,
+                                        "modulus_of_elasticity": 1.0,
+                                        "pressure": 1.0
                                     }
                                 ]
                             },
@@ -181,6 +201,8 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
                 self.dock_menu.left_seal_ChBox.setChecked(False)
                 self.dock_menu.right_seal_ChBox.setChecked(False)
                 QMessageBox.information(self, "Успех", f"Проект создан")
+                normalized_data = self._normalize_data_types(basic_project)
+                self.graphics_manager.draw_construction(normalized_data)
 
                 return True
 
@@ -287,6 +309,7 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
         """
         Валидация данных проекта с проверкой типов и структуры
         """
+        self.main_window.starus_bar_label.setText("")
         try:
             # 1. Проверка наличия основных ключей
             required_root_keys = ['Objects', 'Left_support', 'Right_support']
@@ -378,10 +401,8 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
                 return False
 
             node_numbers = []
-            node_forces = {}
             for node_load in data['Objects'][1]['list_of_values']:
                 # Проверка наличия ключей
-
                 required_node_keys = ['node_number', 'force_value']
                 if not all(key in node_load for key in required_node_keys):
                     return False
@@ -399,13 +420,10 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
                 # Проверка существования узла
                 total_nodes = bars_quantity + 1
                 if node_number > total_nodes:
+                    self.main_window.starus_bar_label.setText("Есть сосредоточенная нагрузка на несуществующий узел!")
                     return False
 
                 node_numbers.append(node_number)
-
-                if node_number not in node_forces:
-                    node_forces[node_number] = []
-                node_forces[node_number].append(force_value)
 
             # 9. Проверка распределенных нагрузок
             distributed_loads_quantity = self._safe_convert_to_int(data['Objects'][2]['quantity'])
@@ -431,6 +449,7 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
 
                 # Проверка существования стержня
                 if bar_number > bars_quantity:
+                    self.main_window.starus_bar_label.setText("Есть распределенная нагрузка на несуществующий стержень!")
                     return False
 
                 distributed_bar_numbers.append(bar_number)
@@ -443,15 +462,12 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
             if sorted(bar_numbers) != list(range(1, bars_quantity + 1)):
                 return False
 
-
-
-
-            # 12. Проверка уникальности стержней для распределенных нагрузок
-            if len(distributed_bar_numbers) != len(set(distributed_bar_numbers)):
+            # 12. Проверка уникальности узлов для сосредоточенных нагрузок
+            if len(node_numbers) != len(set(node_numbers)):
                 return False
 
-            # 13. Проверка конфликтующих нагрузок на одном узле
-            if not self._check_node_loads_conflicts(node_forces):
+            # 13. Проверка уникальности стержней для распределенных нагрузок
+            if len(distributed_bar_numbers) != len(set(distributed_bar_numbers)):
                 return False
 
         except (KeyError, ValueError, TypeError, IndexError) as e:
@@ -459,6 +475,51 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
             return False
 
         return True
+
+    def _safe_convert_to_int(self, value):
+        """
+        Безопасное преобразование к целому числу
+        """
+        try:
+            if value is None:
+                return None
+
+            if isinstance(value, (int, float)):
+                return int(value)
+            elif isinstance(value, str):
+                # Удаляем пробелы и проверяем на пустоту
+                cleaned = value.strip()
+                if not cleaned:
+                    return None
+                # Сначала в float, потом в int для случаев "1.0", "2.0"
+                return int(float(cleaned))
+            else:
+                return None
+        except (ValueError, TypeError):
+            return None
+
+    def _safe_convert_to_float(self, value):
+        """
+        Безопасное преобразование к вещественному числу
+        """
+        try:
+            if value is None:
+                return None
+
+            if isinstance(value, (int, float)):
+                return float(value)
+            elif isinstance(value, str):
+                # Удаляем пробелы и проверяем на пустоту
+                cleaned = value.strip()
+                if not cleaned:
+                    return None
+                # Заменяем запятую на точку для корректного преобразования
+                cleaned = cleaned.replace(',', '.')
+                return float(cleaned)
+            else:
+                return None
+        except (ValueError, TypeError):
+            return None
 
     def _check_node_loads_conflicts(self, node_forces):
         """
@@ -613,6 +674,7 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
         self.dock_menu.left_seal_ChBox.stateChanged.connect(self.on_construction_data_changed)
         self.dock_menu.right_seal_ChBox.stateChanged.connect(self.on_construction_data_changed)
 
+
     def on_construction_data_changed(self):
         """Вызывается при изменении данных в таблицах или заделках"""
         try:
@@ -621,7 +683,7 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
 
             # Если таблица стержней пустая, очищаем графику и устанавливаем статус "не сохранено"
             if self.dock_menu.barsTable.rowCount() == 0:
-                self.graphics_manager.draw_construction(None)
+                self.graphics_manager.draw_construction(None, False, False)
                 self.main_window.set_project_saved_status(False)
                 return
 
@@ -629,11 +691,21 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
                 # Обновляем текущие данные
                 self.current_data = data
 
+                grid = False
+                loads = False
+
                 # Обновляем графическое отображение
-                self.graphics_manager.draw_construction(data)
+                if self.draw_grid_checkbox.isChecked():
+                    grid = True
+                if self.loads_checkbox.isChecked():
+                    loads = True
+
+                self.graphics_manager.draw_construction(data, grid, loads)
 
                 # Устанавливаем статус "не сохранено"
                 self.main_window.set_project_saved_status(False)
+            # else:
+            #     self.main_window.starus_bar_label.setText("В таблицах есть пустые значения!")
 
         except Exception as e:
             print(f"Ошибка при обновлении графики: {e}")
@@ -651,8 +723,4 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
         self.on_construction_data_changed()
 
     def close_application(self):
-        reply = QMessageBox.question(self, "Выход",
-                                     "Вы уверены, что хотите выйти?",
-                                     QMessageBox.Yes | QMessageBox.No)
-        if reply == QMessageBox.Yes:
             self.main_window.close()

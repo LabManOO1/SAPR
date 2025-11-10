@@ -1,5 +1,5 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QTabWidget, QWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QTabWidget, QWidget, QMessageBox
 from PyQt5.QtGui import QIcon
 from Preprocessor import PreprocessorTab
 import os
@@ -15,6 +15,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"SAPR")
         self.setGeometry(350, 200, 1280, 720)
         self.setWindowIcon(QIcon("icons/MainIcon.png"))
+        self.starus_bar_label = QLabel("")
+        self.statusBar().addPermanentWidget(self.starus_bar_label)
 
         # СОЗДАЕМ ВИДЖЕТ ВКЛАДОК
         self.tabs = QTabWidget()
@@ -63,6 +65,21 @@ class MainWindow(QMainWindow):
 
     def setup_postprocessor(self):
         pass
+
+    def closeEvent(self, event):
+        """Обработка события закрытия окна"""
+        reply = QMessageBox.question(
+            self,
+            'Подтверждение выхода',
+            'Вы уверены, что хотите выйти?',
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            event.accept()  # Закрыть приложение
+        else:
+            event.ignore()  # Отменить закрытие
 
 def main():
     app = QApplication(sys.argv)

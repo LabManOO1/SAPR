@@ -203,7 +203,7 @@ class NodeLoad(QGraphicsItemGroup):
             y_top1 = -3
             y_top2 = 3
             x_text = -25
-        value = force_value
+        value = abs(force_value)
         if len(str(value)) > 4:
             value = "{:.1e}".format(value)
 
@@ -297,6 +297,7 @@ class DistributedLoad(QGraphicsItemGroup):
                     bot_arrow.setPen(QPen(QColor("#245AC7"), 1))
                     self.addToGroup(bot_arrow)
                 current_x += length_arrow + spacing
+        self.value = abs(self.value)
         if len(str(self.value)) > 4:
             self.value = "{:.2e}".format(self.value)
         self.text_item = QGraphicsTextItem(f"{self.value}")
@@ -389,10 +390,13 @@ class ConstructionGraphicsManager:
         # for y in range(-1000, 1001, spacing):
         #     self.scene.addLine(-1000, y, 1000, y, pen)
 
-    def draw_construction(self, data):
+    def draw_construction(self, data, draw_grid = False, draw_loads = True):
         """Отрисовка стержней и сил"""
         self.clear_construction()
-        self.draw_loads(data)
+        if draw_grid:
+            self.draw_grid()
+        if draw_loads:
+            self.draw_loads(data)
         self.draw_bar(data)
 
 
@@ -469,13 +473,22 @@ class ConstructionGraphicsManager:
             length_construction = 0
             for list_of_values in data["Objects"][0]["list_of_values"]:
                 if list_of_values["length"] > 15:
-                    length_construction += 15
+                    length_construction += 15.0
                 elif list_of_values["length"] < 1.2:
                     length_construction += 1.2
                 else:
                     length_construction += list_of_values["length"]
             right_support = SupportGraphicsItem(length_construction * x_spacing, 0, False, max_cross_section * y_spacing + 20)
             self.scene.addItem(right_support)
+        length_construction = 0
+        for list_of_values in data["Objects"][0]["list_of_values"]:
+            if list_of_values["length"] > 15:
+                length_construction += 15.0
+            elif list_of_values["length"] < 1.2:
+                length_construction += 1.2
+            else:
+                length_construction += list_of_values["length"]
+
 
         self.center_on_constucrion((length_construction * x_spacing)/2)
         self.view.x_ = (length_construction * x_spacing)/2

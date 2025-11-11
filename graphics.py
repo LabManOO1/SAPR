@@ -243,10 +243,6 @@ class DistributedLoad(QGraphicsItemGroup):
         count_arrow = 4
         current_x = 0
         self.length = length
-        if self.length > 15:
-            self.length = 15
-        if self.length < 1.2:
-            self.length = 1.2
         spacing = 5
         self.value = value
         if str(self.value)[-2:] == ".0":
@@ -254,9 +250,10 @@ class DistributedLoad(QGraphicsItemGroup):
 
 
         length_arrow = 15
-        if self.length < 2:
-            length_arrow = (self.length * 40) / 5.3
-            spacing = (self.length * 40) / 16
+        if self.length < 60:
+
+            spacing = (self.length) / 16
+            length_arrow = (self.length - count_arrow * spacing + spacing) / count_arrow
             for i in range(count_arrow):
 
                 main_arrow = QGraphicsLineItem(current_x, 0, current_x + length_arrow, 0)
@@ -278,7 +275,13 @@ class DistributedLoad(QGraphicsItemGroup):
                 self.addToGroup(main_arrow)
                 current_x += length_arrow + spacing
         else:
-            while (current_x + length_arrow  < self.length * 40):
+            count_arrow = 0
+            while (current_x + length_arrow  < self.length):
+                count_arrow += 1
+                current_x += length_arrow + spacing
+            length_arrow = (self.length - count_arrow * spacing + spacing)/count_arrow
+            current_x = 0
+            for i in range(count_arrow):
                 main_arrow = QGraphicsLineItem(current_x, 0, current_x + length_arrow, 0)
                 main_arrow.setPen(QPen(QColor("#245AC7"), 1))
                 self.addToGroup(main_arrow)
@@ -311,7 +314,7 @@ class DistributedLoad(QGraphicsItemGroup):
         self.text_item.setDefaultTextColor(QColor("#245AC7"))
         self.addToGroup(self.text_item)
 
-        self.text_item.setPos(length * 40 / 2 - x_, 2)
+        self.text_item.setPos(length / 2 - x_, 2)
 
 
 
@@ -319,9 +322,11 @@ class DistributedLoad(QGraphicsItemGroup):
 
 class ConstructionGraphicsView(QGraphicsView):
     def __init__(self, scene):
-        super().__init__(scene)
-        self.setup_view()
-        self.x_ = None
+        super().__init__()
+        self.setScene(scene)
+        self.setMinimumHeight(270)
+        # self.setup_view()
+        # self.x_ = None
 
     def setup_view(self):
         self.setRenderHint(QPainter.Antialiasing)
@@ -368,33 +373,26 @@ class ConstructionGraphicsManager:
         self.scene = QGraphicsScene()
         self.view = ConstructionGraphicsView(self.scene)
         self.setup_graphics()
+        self.max_width = 700
+        self.max_height = 250
 
     def setup_graphics(self):
         # Настройка сцены
         self.scene.setBackgroundBrush(QBrush(QColor(250, 250, 250)))
 
-        # Рисуем сетку
-        self.draw_grid()
-
     def draw_grid(self, spacing=10):
         grid = GridItem(10)
         self.scene.addItem(grid)
-        # """Отрисовка сетки"""
-        # pen = QPen(QColor(220, 220, 220), 1)
-        #
-        # # Вертикальные линии
-        # for x in range(-1000, 1001, spacing):
-        #     self.scene.addLine(x, -1000, x, 1000, pen)
-        #
-        # # Горизонтальные линии
-        # for y in range(-1000, 1001, spacing):
-        #     self.scene.addLine(-1000, y, 1000, y, pen)
 
     def draw_construction(self, data, draw_grid = False, draw_loads = True):
         """Отрисовка стержней и сил"""
+        # self.clear_construction()
+        # if draw_grid:
+        #     self.draw_grid()
+        # if draw_loads:
+        #     self.draw_loads(data)
+        # self.draw_bar(data)
         self.clear_construction()
-        if draw_grid:
-            self.draw_grid()
         if draw_loads:
             self.draw_loads(data)
         self.draw_bar(data)
@@ -402,150 +400,153 @@ class ConstructionGraphicsManager:
 
     def draw_bar(self, data):
         """Отрисовка стержней"""
-        #self.draw_grid()
-        x_spacing = 40
-        y_spacing = 40
         current_x = 0
         first_bar = True
         if not data:
             self.clear_construction()
             return
-        max_cross_section = 0
-        for list_of_values in data["Objects"][0]["list_of_values"]:
-            if max_cross_section < list_of_values["cross_section"]:
-                max_cross_section = list_of_values["cross_section"]
-        if max_cross_section > 10:
-            max_cross_section = 10
+        max_cross_section = 250
 
 
-        for list_of_values in data["Objects"][0]["list_of_values"]:
-            length_bar = list_of_values["length"]
-            if length_bar > 15:
-                length_bar = 15
-            if length_bar < 1.2:
-                length_bar = 1.2
+        for i, (scaled_width, scaled_height) in enumerate(self.bar_scaling(data)):
+            real_width = data["Objects"][0]["list_of_values"][i]["length"]
+            bar_number = data["Objects"][0]["list_of_values"][i]["barNumber"]
 
-            cross_section = list_of_values["cross_section"]
-            if cross_section > 10:
-                cross_section = 10
-            if cross_section < 0.2:
-                cross_section = 0.2
-            bar_item = BarGraphicsItem(current_x * x_spacing, -cross_section/2 * y_spacing, length_bar * x_spacing, cross_section * y_spacing, list_of_values["barNumber"])
+            bar_item = BarGraphicsItem(current_x, -scaled_height/2, scaled_width, scaled_height, bar_number)
             self.scene.addItem(bar_item)
 
-            bar_number = BarNumber(current_x * x_spacing + (length_bar * x_spacing)/2, cross_section/2 * y_spacing + 15, int(list_of_values["barNumber"]))
-            self.scene.addItem(bar_number)
+            bar_Number = BarNumber(current_x + (scaled_width)/2, scaled_height/2 + 15, bar_number)
+            self.scene.addItem(bar_Number)
 
-            LengthBarLine = LengthBarGraphicsItem(current_x * x_spacing, length_bar * x_spacing, (max_cross_section / 2 * y_spacing) + 60, list_of_values["length"])
+            LengthBarLine = LengthBarGraphicsItem(current_x, scaled_width, (max_cross_section / 2) + 60, real_width)
             self.scene.addItem(LengthBarLine)
             if first_bar:
-                left_line = QGraphicsLineItem(0, cross_section/2 * y_spacing ,0 , (max_cross_section/2 * y_spacing) + 60)
-                right_line = QGraphicsLineItem(current_x * x_spacing + length_bar * x_spacing, cross_section / 2 * y_spacing, current_x * x_spacing + length_bar * x_spacing,
-                                              (max_cross_section / 2 * y_spacing) + 60)
+                left_line = QGraphicsLineItem(0, scaled_height/2, 0, (max_cross_section/2) + 60)
+                right_line = QGraphicsLineItem(current_x + scaled_width, scaled_height / 2, current_x + scaled_width,
+                                              (max_cross_section / 2) + 60)
                 self.scene.addItem(left_line)
                 self.scene.addItem(right_line)
 
-                left_node_item = NodeGraphicsItem(0, (max_cross_section/2 * y_spacing) + 30, 1)
-                right_node_item = NodeGraphicsItem(current_x * x_spacing + length_bar * x_spacing, (max_cross_section / 2 * y_spacing) + 30, 2)
+                left_node_item = NodeGraphicsItem(0, (max_cross_section/2) + 30, 1)
+                right_node_item = NodeGraphicsItem(current_x + scaled_width, (max_cross_section / 2) + 30, 2)
                 self.scene.addItem(left_node_item)
                 self.scene.addItem(right_node_item)
             else:
-                line = QGraphicsLineItem(current_x * x_spacing + length_bar * x_spacing,
-                                               cross_section / 2 * y_spacing,
-                                               current_x * x_spacing + length_bar * x_spacing,
-                                               (max_cross_section / 2 * y_spacing) + 60)
+                line = QGraphicsLineItem(current_x + scaled_width,
+                                               scaled_height / 2,
+                                               current_x + scaled_width,
+                                               (max_cross_section / 2) + 60)
                 self.scene.addItem(line)
-                node_item = NodeGraphicsItem(current_x * x_spacing + length_bar * x_spacing,
-                                             (max_cross_section / 2 * y_spacing) + 30, list_of_values["barNumber"]+1)
+                node_item = NodeGraphicsItem(current_x + scaled_width,
+                                             (max_cross_section / 2) + 30, bar_number+1)
                 self.scene.addItem(node_item)
-            current_x += length_bar
+            current_x += scaled_width
             first_bar = False
 
         is_left_support = data["Left_support"]
         is_right_support = data["Right_support"]
-        length_construction = 0
-        for list_of_values in data["Objects"][0]["list_of_values"]:
-            length_construction += list_of_values["length"]
+        length_construction = self.max_width
         if is_left_support:
-            left_support = SupportGraphicsItem(0, 0, True, max_cross_section * y_spacing + 20)
+            left_support = SupportGraphicsItem(0, 0, True, max_cross_section + 20)
             self.scene.addItem(left_support)
         if is_right_support:
-            length_construction = 0
-            for list_of_values in data["Objects"][0]["list_of_values"]:
-                if list_of_values["length"] > 15:
-                    length_construction += 15.0
-                elif list_of_values["length"] < 1.2:
-                    length_construction += 1.2
-                else:
-                    length_construction += list_of_values["length"]
-            right_support = SupportGraphicsItem(length_construction * x_spacing, 0, False, max_cross_section * y_spacing + 20)
+            right_support = SupportGraphicsItem(length_construction, 0, False, max_cross_section + 20)
             self.scene.addItem(right_support)
-        length_construction = 0
-        for list_of_values in data["Objects"][0]["list_of_values"]:
-            if list_of_values["length"] > 15:
-                length_construction += 15.0
-            elif list_of_values["length"] < 1.2:
-                length_construction += 1.2
-            else:
-                length_construction += list_of_values["length"]
-
-
-        self.center_on_constucrion((length_construction * x_spacing)/2)
-        self.view.x_ = (length_construction * x_spacing)/2
-
-
-
-        # # Подпись стержня
-        # text_item = QGraphicsTextItem(f"Стержень {bar_index + 1}")
-        # text_item.setPos((x1 + x2) / 2 - 20, y - 20)
-        # text_item.setDefaultTextColor(Qt.darkBlue)
-        # self.scene.addItem(text_item)
-
-    def center_on_constucrion(self, x):
-        self.view.centerOn(x, 0)
 
     def draw_loads(self, data):
         """Отрисовка нагрузок"""
-        x_spacing = 40
-        y_spacing = 40
-
         max_node = data["Objects"][0]["quantity"] + 1
+        lengths = []
+        for length in self.bar_scaling(data):
+            lengths.append(length[0])
+        bar_numbers = [bar_number["barNumber"] for bar_number in data["Objects"][0]["list_of_values"]]
 
         for distributed_load in data["Objects"][2]["list_of_values"]:
             current_x = 0
-            for bar in data["Objects"][0]["list_of_values"]:
-                length = bar["length"]
-                if length > 15:
-                    length = 15
-                if length < 1.2:
-                    length = 1.2
-                if distributed_load["bar_number"] == bar["barNumber"]:
-                    distrload = DistributedLoad(current_x, current_x + length * 40, length, distributed_load["distributed_value"])
+            for i in range(len(bar_numbers)):
+                if distributed_load["bar_number"] == bar_numbers[i]:
+                    distrload = DistributedLoad(current_x, current_x + lengths[i], lengths[i], distributed_load["distributed_value"])
                     self.scene.addItem(distrload)
 
-                current_x += length * 40
+                current_x += lengths[i]
 
 
         for node_load in data["Objects"][1]["list_of_values"]:
             node_number = node_load["node_number"]
             x_ = 0
-            for bar in data["Objects"][0]["list_of_values"]:
-                if bar["barNumber"] < node_number:
-                    if bar["length"] > 15:
-                        x_ += 15 * x_spacing
-                    elif bar["length"] < 1.2:
-                        x_ += 1.2 * x_spacing
-                    else:
-                        x_ += bar["length"] * x_spacing
-            if not ((node_number == 1  and data["Left_support"] == 1) or (node_number == max_node and data["Right_support"] == 1)):
+            for i in range(len(bar_numbers)):
+                if bar_numbers[i] < node_number:
+                    x_ += lengths[i]
+            if not ((node_number == 1 and data["Left_support"] == 1) or (node_number == max_node and data["Right_support"] == 1)):
                 load = NodeLoad(x_, 0, node_load["force_value"])
                 self.scene.addItem(load)
 
+    def bar_scaling(self, data):
+        self.max_width = self.view.viewport().width() - 200
+        print(self.max_width)
+        bars_widths = [bars["length"] for bars in data["Objects"][0]["list_of_values"]]
+        bars_heights = [bars["cross_section"] for bars in data["Objects"][0]["list_of_values"]]
+        sum_width = sum(bars_widths)
+        width_scale = self.max_width / sum_width
+        scaled_width = [width * width_scale for width in bars_widths]
+        max_height = max(bars_heights)
+        height_scale = self.max_height / max_height
+        scaled_height = [height * height_scale for height in bars_heights]
+        min_width = 70
+        min_height = 40
+
+        scaled_width = [max(min_width, width) for width in scaled_width]
+        scaled_height = [max(min_height, height) for height in scaled_height]
+
+        sum_scaled_width = sum(scaled_width)
+        if sum_scaled_width > self.max_width:
+            new_width_scale = self.max_width / sum_scaled_width
+            scaled_width = [width * new_width_scale for width in scaled_width]
+
+        gain_width = self.correcting_difference_small_values(scaled_width, True)
+
+        gain_height = self.correcting_difference_small_values(scaled_height, False)
+
+        if sum(gain_width) != self.max_width:
+            final_width = self.normalization_amounts(gain_width, self.max_width)
+        else:
+            final_width = gain_width
+        return list(zip(final_width, gain_height))
 
 
+    def correcting_difference_small_values(self, values, is_width):
+        if len(values) < 2:
+            return values
+        else:
+            max_value = max(values)
+            min_value = min(values)
+            if (max_value - min_value) < (0.02 * max_value):
+                ratio = 3 if is_width else 2
+                avg_value = sum(values) / len(values)
+                new_values = list()
+                for value in values:
+                    if value > avg_value:
+                        new_values.append(value * (1 + ratio * (value - avg_value)/avg_value))
+                    else:
+                        new_values.append(value * (1 - ratio * (value - avg_value) / avg_value))
+                if is_width:
+                    return self.normalization_amounts(new_values, sum(values))
+                else:
+                    max_new_value = max(new_values)
+                    ratio = max(values)/max_new_value if max_new_value > 0 else 1
+                    return [value * ratio for value in new_values]
+            return values
+
+
+    def normalization_amounts(self, values, sum_past_values):
+        sum_values = sum(values)
+        if sum_values == 0:
+            return [sum_past_values/len(values)] * len(values)
+        else:
+            ratio = sum_past_values / sum_values
+            return [value * ratio for value in values]
 
 
     def clear_construction(self):
         """Очистка сцены"""
         self.scene.clear()
-        #self.draw_grid()  # Перерисовываем сетку

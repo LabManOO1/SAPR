@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QMessageBox, QTableWidget, QHeaderView, QItemDelegate, QLineEdit, QTableWidgetItem
 from PyQt5.QtCore import Qt, QRegExp
-from PyQt5.QtGui import QDoubleValidator, QIntValidator, QValidator, QRegExpValidator
+from PyQt5.QtGui import QIntValidator, QRegExpValidator
 
 
 class NumericDelegate(QItemDelegate):
@@ -28,21 +28,10 @@ class NumericDelegate(QItemDelegate):
             validator = QRegExpValidator(regex)
             editor.setValidator(validator)
 
-            editor.textChanged.connect(lambda text: self.on_text_changed(editor, text))
-
         return editor
 
-    def on_text_changed(self, editor, text):
-        """Автоматически заменяем запятую на точку"""
-        if ',' in text:
-            new_text = text.replace(',', '.')
-            editor.setText(new_text)
-            editor.setCursorPosition(len(new_text))
-        if text[-1] == '.':
-            text += "0"
-
     def setModelData(self, editor, model, index):
-        """Сохраняем данные из редактора в модель"""
+        """Сохраняем данные из редактора в модель - УПРОЩЕННАЯ ВЕРСИЯ"""
         text = editor.text().strip()
 
         # Разрешаем пустые значения
@@ -50,35 +39,32 @@ class NumericDelegate(QItemDelegate):
             model.setData(index, "", Qt.EditRole)
             return
 
-        # Заменяем запятую на точку для корректного преобразования
         text = text.replace(',', '.')
+        if text[0] == '.':
+            text = '0' + text
         if text[-1] == '.':
-            text += "0"
-        if text == "0" or text == "0.0":
-            text = "1"
-        if text == ".0":
-            text = "1"
-        if text[0] == ".":
-            text = text.replace(".", "")
+            text = 1
 
-        # Проверяем валидность
+        # Для целых чисел
         if self.is_integer:
             try:
-                value = int(text)
+                value = int(float(text))  # Сначала в float, потом в int для случаев "1.0"
                 if self.is_plus and value < 0:
                     model.setData(index, "", Qt.EditRole)
                 else:
                     model.setData(index, str(value), Qt.EditRole)
-            except ValueError:
+            except (ValueError, TypeError):
                 model.setData(index, "", Qt.EditRole)
+        # Для вещественных чисел
         else:
             try:
                 value = float(text)
                 if self.is_plus and value < 0:
                     model.setData(index, "", Qt.EditRole)
                 else:
-                    model.setData(index, text, Qt.EditRole)  # Сохраняем с точкой
-            except ValueError:
+                    # Сохраняем как есть, без лишних преобразований
+                    model.setData(index, text, Qt.EditRole)
+            except (ValueError, TypeError):
                 model.setData(index, "", Qt.EditRole)
 
 
@@ -173,7 +159,6 @@ class ConstructionTable(QTableWidget):
 
     def remove_node_loads(self, bar_number, concentrated_loads_table):
         """Удалить сосредоточенные нагрузки для узлов указанного стержня"""
-        # У стержня с номером bar_number есть два узла: bar_number и bar_number + 1
         node1 = bar_number
         node2 = bar_number + 1
 
@@ -237,17 +222,22 @@ class ConstructionTable(QTableWidget):
                 self.setRowCount(quantity)
 
                 for list_of_values in data["Objects"][0]["list_of_values"]:
-
                     bar_number = list_of_values["barNumber"]
                     if isinstance(bar_number, str):
                         bar_number = int(bar_number)
                     bar_index = bar_number - 1
 
                     if 0 <= bar_index < self.rowCount():
-                        self.setItem(bar_index, 0, QTableWidgetItem(str(list_of_values["length"])))
-                        self.setItem(bar_index, 1, QTableWidgetItem(str(list_of_values["cross_section"])))
-                        self.setItem(bar_index, 2, QTableWidgetItem(str(list_of_values["modulus_of_elasticity"])))
-                        self.setItem(bar_index, 3, QTableWidgetItem(str(list_of_values["pressure"])))
+                        # Безопасное создание элементов с проверкой значений
+                        length = list_of_values.get("length", "")
+                        cross_section = list_of_values.get("cross_section", "")
+                        modulus = list_of_values.get("modulus_of_elasticity", "")
+                        pressure = list_of_values.get("pressure", "")
+
+                        self.setItem(bar_index, 0, QTableWidgetItem(str(length) if length else ""))
+                        self.setItem(bar_index, 1, QTableWidgetItem(str(cross_section) if cross_section else ""))
+                        self.setItem(bar_index, 2, QTableWidgetItem(str(modulus) if modulus else ""))
+                        self.setItem(bar_index, 3, QTableWidgetItem(str(pressure) if pressure else ""))
 
             if self.type == "node_loads":
                 quantity = data["Objects"][1]["quantity"]
@@ -258,8 +248,11 @@ class ConstructionTable(QTableWidget):
                 current_row = 0
                 for list_of_values in data["Objects"][1]["list_of_values"]:
                     if 0 <= current_row < self.rowCount():
-                        self.setItem(current_row, 0, QTableWidgetItem(str(list_of_values["node_number"])))
-                        self.setItem(current_row, 1, QTableWidgetItem(str(list_of_values["force_value"])))
+                        node_number = list_of_values.get("node_number", "")
+                        force_value = list_of_values.get("force_value", "")
+
+                        self.setItem(current_row, 0, QTableWidgetItem(str(node_number) if node_number else ""))
+                        self.setItem(current_row, 1, QTableWidgetItem(str(force_value) if force_value else ""))
                         current_row += 1
 
             if self.type == "distributed_loads":
@@ -271,11 +264,15 @@ class ConstructionTable(QTableWidget):
                 current_row = 0
                 for list_of_values in data["Objects"][2]["list_of_values"]:
                     if 0 <= current_row < self.rowCount():
-                        self.setItem(current_row, 0, QTableWidgetItem(str(list_of_values["bar_number"])))
-                        self.setItem(current_row, 1, QTableWidgetItem(str(list_of_values["distributed_value"])))
+                        bar_number = list_of_values.get("bar_number", "")
+                        distributed_value = list_of_values.get("distributed_value", "")
+
+                        self.setItem(current_row, 0, QTableWidgetItem(str(bar_number) if bar_number else ""))
+                        self.setItem(current_row, 1,
+                                     QTableWidgetItem(str(distributed_value) if distributed_value else ""))
                         current_row += 1
 
-        except (KeyError, ValueError, IndexError) as e:
+        except (KeyError, ValueError, IndexError, AttributeError) as e:
             print(f"Ошибка загрузки таблицы: {e}")
             return False
         finally:
@@ -296,79 +293,91 @@ class ConstructionTable(QTableWidget):
         if self.type == "bar":
             data["quantity"] = rowsCount
             for row in range(self.rowCount()):
-                if all([self.item(row, 0), self.item(row, 1), self.item(row, 2), self.item(row, 3)]):
-                    row_data = dict()
-                    row_data["barNumber"] = row + 1
+                row_data = dict()
+                row_data["barNumber"] = row + 1
 
-                    # ПРЕОБРАЗУЕМ В ЧИСЛА, НО ПРОВЕРЯЕМ НА ПУСТОТУ
-                    try:
-                        length_text = self.item(row, 0).text().strip()
-                        cross_section_text = self.item(row, 1).text().strip()
-                        modulus_text = self.item(row, 2).text().strip()
-                        pressure_text = self.item(row, 3).text().strip()
+                # Безопасное получение значений с проверкой на None
+                try:
+                    # Получаем элементы безопасно
+                    item_0 = self.item(row, 0)
+                    item_1 = self.item(row, 1)
+                    item_2 = self.item(row, 2)
+                    item_3 = self.item(row, 3)
 
-                        if not all([length_text, cross_section_text, modulus_text, pressure_text]):
-                            f = False
-                            continue
+                    # Получаем текст или пустую строку если элемент None
+                    length_text = item_0.text().strip() if item_0 else ""
+                    cross_section_text = item_1.text().strip() if item_1 else ""
+                    modulus_text = item_2.text().strip() if item_2 else ""
+                    pressure_text = item_3.text().strip() if item_3 else ""
 
-                        row_data["length"] = float(length_text) if length_text else 0
-                        row_data["cross_section"] = float(cross_section_text) if cross_section_text else 0
-                        row_data["modulus_of_elasticity"] = float(modulus_text) if modulus_text else 0
-                        row_data["pressure"] = float(pressure_text) if pressure_text else 0
-
-                        list_of_values.append(row_data)
-                    except ValueError:
+                    # Проверяем, что все ячейки заполнены
+                    if not all([length_text, cross_section_text, modulus_text, pressure_text]):
                         f = False
-                else:
+                        continue
+
+                    # Преобразуем в числа
+                    row_data["length"] = float(length_text) if length_text else 0
+                    row_data["cross_section"] = float(cross_section_text) if cross_section_text else 0
+                    row_data["modulus_of_elasticity"] = float(modulus_text) if modulus_text else 0
+                    row_data["pressure"] = float(pressure_text) if pressure_text else 0
+
+                    list_of_values.append(row_data)
+                except (ValueError, AttributeError) as e:
+                    print(f"Ошибка в строке {row}: {e}")
                     f = False
+
             data["list_of_values"] = list_of_values
 
         if self.type == "node_loads":
             data["quantity"] = rowsCount
             for row in range(self.rowCount()):
-                if self.item(row, 0) and self.item(row, 1):
-                    row_data = dict()
+                row_data = dict()
 
-                    try:
-                        node_text = self.item(row, 0).text().strip()
-                        force_text = self.item(row, 1).text().strip()
+                try:
+                    item_0 = self.item(row, 0)
+                    item_1 = self.item(row, 1)
 
-                        if not all([node_text, force_text]):
-                            f = False
-                            continue
+                    node_text = item_0.text().strip() if item_0 else ""
+                    force_text = item_1.text().strip() if item_1 else ""
 
-                        row_data["node_number"] = int(node_text) if node_text else 0
-                        row_data["force_value"] = float(force_text) if force_text else 0
-
-                        list_of_values.append(row_data)
-                    except ValueError:
+                    if not all([node_text, force_text]):
                         f = False
-                else:
+                        continue
+
+                    row_data["node_number"] = int(node_text) if node_text else 0
+                    row_data["force_value"] = float(force_text) if force_text else 0
+
+                    list_of_values.append(row_data)
+                except (ValueError, AttributeError) as e:
+                    print(f"Ошибка в строке {row}: {e}")
                     f = False
+
             data["list_of_values"] = list_of_values
 
         if self.type == "distributed_loads":
             data["quantity"] = rowsCount
             for row in range(self.rowCount()):
-                if self.item(row, 0) and self.item(row, 1):
-                    row_data = dict()
+                row_data = dict()
 
-                    try:
-                        bar_text = self.item(row, 0).text().strip()
-                        distributed_text = self.item(row, 1).text().strip()
+                try:
+                    item_0 = self.item(row, 0)
+                    item_1 = self.item(row, 1)
 
-                        if not all([bar_text, distributed_text]):
-                            f = False
-                            continue
+                    bar_text = item_0.text().strip() if item_0 else ""
+                    distributed_text = item_1.text().strip() if item_1 else ""
 
-                        row_data["bar_number"] = int(bar_text) if bar_text else 0
-                        row_data["distributed_value"] = float(distributed_text) if distributed_text else 0
-
-                        list_of_values.append(row_data)
-                    except ValueError:
+                    if not all([bar_text, distributed_text]):
                         f = False
-                else:
+                        continue
+
+                    row_data["bar_number"] = int(bar_text) if bar_text else 0
+                    row_data["distributed_value"] = float(distributed_text) if distributed_text else 0
+
+                    list_of_values.append(row_data)
+                except (ValueError, AttributeError) as e:
+                    print(f"Ошибка в строке {row}: {e}")
                     f = False
+
             data["list_of_values"] = list_of_values
 
         if f:

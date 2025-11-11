@@ -27,7 +27,7 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
         top_layout = QHBoxLayout()
 
         middle_layout = QHBoxLayout()
-        graphics_widget = self.create_graphics_widget()
+        graphics_widget = self.graphics_manager.view
         middle_layout.addWidget(graphics_widget)
 
         self.FileButton = QPushButton('Файл')
@@ -63,10 +63,8 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
         bottom_layout.addStretch(1)
 
         mainPreProc_layout.addLayout(top_layout)
-        mainPreProc_layout.addStretch(1)
 
         mainPreProc_layout.addLayout(middle_layout)
-        mainPreProc_layout.addStretch(1)
 
         mainPreProc_layout.addLayout(bottom_layout)
 
@@ -74,12 +72,8 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
 
     def create_graphics_widget(self):
         """Создание виджета с графикой конструкции"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-
+        layout = QVBoxLayout()
         layout.addWidget(self.graphics_manager.view)
-
-        return widget
 
     def show_startup_dialog(self):
         """Показать стартовое диалоговое окно"""
@@ -520,30 +514,6 @@ class PreprocessorTab(QWidget):  # Наследуем от QWidget
                 return None
         except (ValueError, TypeError):
             return None
-
-    def _check_node_loads_conflicts(self, node_forces):
-        """
-        Проверяет, есть ли на одном узле нагрузки с одинаковым знаком
-        Возвращает False если обнаружены конфликты
-        """
-        for node_number, forces in node_forces.items():
-            if len(forces) > 1:
-                # Проверяем знаки всех сил на этом узле
-                signs = [1 if force > 0 else -1 if force < 0 else 0 for force in forces]
-
-                # Если все ненулевые силы имеют одинаковый знак - это конфликт
-                non_zero_signs = [sign for sign in signs if sign != 0]
-                if len(non_zero_signs) > 0:
-                    first_sign = non_zero_signs[0]
-                    if all(sign == first_sign for sign in non_zero_signs):
-                        print(
-                            f"Обнаружены конфликтующие нагрузки на узле {node_number}: все силы имеют одинаковый знак")
-                        return False
-
-                # Дополнительная проверка: если есть силы с разными знаками, это нормально
-                # (они могут компенсировать друг друга)
-
-        return True
 
     def _safe_convert_to_int(self, value):
         """

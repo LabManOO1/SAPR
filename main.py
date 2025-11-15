@@ -2,13 +2,14 @@ import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QTabWidget, QWidget, QMessageBox
 from PyQt5.QtGui import QIcon
 from preprocessor.Preprocessor import PreprocessorTab
+from processor.processor import ProcessorTab
 import os
-
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.file_path = None
+        self.current_data = None
         self.initUI()
 
     def initUI(self):
@@ -24,18 +25,27 @@ class MainWindow(QMainWindow):
 
         # СОЗДАЕМ СОДЕРЖИМОЕ ДЛЯ КАЖДОЙ ВКЛАДКИ
         # Вкладка 1 - Препроцессор
-        self.preprocessor_tab = PreprocessorTab(self, self.file_path)  # Передаем self (главное окно)
+        self.preprocessor_tab = PreprocessorTab(self, self.file_path)
         self.tabs.addTab(self.preprocessor_tab, "Препроцессор")
 
         # Вкладка 2 - Процессор
-        self.processor_tab = QWidget()
-        self.setup_processor()
+        self.processor_tab = ProcessorTab(self)
         self.tabs.addTab(self.processor_tab, "Процессор")
 
         # Вкладка 3 - Постпроцессор
         self.postprocessor_tab = QWidget()
         self.setup_postprocessor()
         self.tabs.addTab(self.postprocessor_tab, "Постпроцессор")
+
+        # Подключаем сигнал смены вкладок
+        self.tabs.currentChanged.connect(self.on_tab_changed)
+
+    def on_tab_changed(self, index):
+        """Обновляем данные при переходе на вкладку процессора"""
+        if index == 1:  # Вкладка процессора
+            if hasattr(self.preprocessor_tab, 'current_data'):
+                self.current_data = self.preprocessor_tab.current_data
+                self.processor_tab.set_data(self.current_data)
 
     def handle_new_project(self):
         """Обработка создания нового проекта"""
@@ -86,7 +96,6 @@ def main():
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
-
 
 if __name__ == '__main__':
     main()

@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QTabWidget, QWidget, QMessageBox
 from PyQt5.QtGui import QIcon
-from Preprocessor import PreprocessorTab
+from preprocessor.Preprocessor import PreprocessorTab
 import os
 
 

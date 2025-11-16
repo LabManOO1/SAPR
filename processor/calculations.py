@@ -275,7 +275,8 @@ class BarSystemCalculator:
             'nodal_displacements': self.results.get('nodal_displacements', []),
             'bar_forces': self.results.get('bar_forces', []),
             'bar_stresses': self.results.get('bar_stresses', []),
-            'reactions': self.results.get('reactions', [])
+            'reactions': self.results.get('reactions', []),
+            'distributed_loads': self.data["Objects"][2]["list_of_values"]
         }
 
     def calculate_force_at_point(self, bar_number, x):

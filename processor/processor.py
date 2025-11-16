@@ -198,6 +198,10 @@ class ProcessorTab(QWidget):
                 # Автоматически рассчитываем параметры для текущей точки
                 self.calculate_point_parameters()
 
+                # ПЕРЕДАЕМ ДАННЫЕ В ПОСТПРОЦЕССОР
+                if hasattr(self.main_window, 'post_processor'):
+                    self.main_window.post_processor.set_data(self.current_data, self.calculation_results)
+
                 QMessageBox.information(self, "Успех", "Расчет завершен успешно!")
             else:
                 QMessageBox.critical(self, "Ошибка", "Ошибка при выполнении расчетов")

@@ -1,63 +1,14 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-                             QTableWidget, QTableWidgetItem, QLabel, QMessageBox,
-                             QTabWidget, QHeaderView, QTextEdit, QComboBox,
-                             QDoubleSpinBox, QFormLayout, QGroupBox, QLineEdit)
+                             QLabel, QMessageBox,
+                             QTabWidget, QComboBox,
+                             QDoubleSpinBox, QFormLayout, QGroupBox)
 from PyQt5.QtCore import Qt
 import json
 from processor.calculations import BarSystemCalculator
 import numpy as np
-
-
-class ResultsTable(QTableWidget):
-    def __init__(self, headers, parent=None):
-        super().__init__(parent)
-        self.setColumnCount(len(headers))
-        self.setHorizontalHeaderLabels(headers)
-        self.setEditTriggers(QTableWidget.NoEditTriggers)  # Только чтение
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-
-    def set_data(self, data):
-        self.setRowCount(len(data))
-        for row, row_data in enumerate(data):
-            for col, value in enumerate(row_data):
-                item = QTableWidgetItem(str(value))
-                item.setTextAlignment(Qt.AlignCenter)
-                self.setItem(row, col, item)
-
-
-class StiffnessMatrixTable(QTableWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.setMinimumHeight(400)
-
-    def set_matrix_data(self, matrix):
-        if not matrix:
-            return
-
-        n = len(matrix)
-        self.setRowCount(n)
-        self.setColumnCount(n)
-
-        # Устанавливаем заголовки
-        headers = [f"Узел {i + 1}" for i in range(n)]
-        self.setHorizontalHeaderLabels(headers)
-        self.setVerticalHeaderLabels(headers)
-
-        # Заполняем данными
-        for i in range(n):
-            for j in range(n):
-                value = matrix[i][j]
-                if abs(value) < 1e-10:  # Показываем нули как 0
-                    display_value = "0"
-                else:
-                    display_value = f"{value:.6e}"
-
-                item = QTableWidgetItem(display_value)
-                item.setTextAlignment(Qt.AlignCenter)
-                self.setItem(i, j, item)
+from processor.resultsTableWidget import ResultsTable
+from processor.strengthTableWidget import StrengthTable
+from processor.stiffnessMatrixTableWidget import StiffnessMatrixTable
 
 
 class ProcessorTab(QWidget):
@@ -116,6 +67,7 @@ class ProcessorTab(QWidget):
 
         # Выбор стержня
         self.bar_selector = QComboBox()
+        self.bar_selector.currentIndexChanged.connect(self.update_distributed_table)
         settings_layout.addRow("Стержень:", self.bar_selector)
 
         # Шаг дискретизации
@@ -124,13 +76,8 @@ class ProcessorTab(QWidget):
         self.step_selector.setValue(0.1)
         self.step_selector.setSingleStep(0.1)
         self.step_selector.setDecimals(2)
+        self.step_selector.valueChanged.connect(self.update_distributed_table)
         settings_layout.addRow("Шаг дискретизации:", self.step_selector)
-
-        # Кнопка обновления таблицы распределенных параметров
-        self.update_distributed_btn = QPushButton("Обновить таблицу")
-        self.update_distributed_btn.clicked.connect(self.update_distributed_table)
-        self.update_distributed_btn.setEnabled(False)
-        settings_layout.addRow(self.update_distributed_btn)
 
         # Группа для расчета в конкретной точке (справа)
         point_calc_group = QGroupBox("Расчет параметров в конкретной точке")
@@ -138,6 +85,7 @@ class ProcessorTab(QWidget):
 
         # Выбор стержня для точечного расчета
         self.point_bar_selector = QComboBox()
+        self.point_bar_selector.currentIndexChanged.connect(self.calculate_point_parameters)
         point_layout.addRow("Стержень:", self.point_bar_selector)
 
         # Координата x
@@ -163,7 +111,6 @@ class ProcessorTab(QWidget):
 
         point_layout.addRow(self.point_results_layout)
 
-        # Добавляем обе группы в горизонтальный layout
         settings_horizontal_layout.addWidget(settings_group)
         settings_horizontal_layout.addWidget(point_calc_group)
 
@@ -181,12 +128,16 @@ class ProcessorTab(QWidget):
         # Таблица перемещений узлов (ВТОРАЯ вкладка)
         self.displacements_table = ResultsTable(["Узел", "Перемещение u(x)"])
 
+        # Таблица проверки прочности (НОВАЯ вкладка)
+        self.strength_table = StrengthTable()
+
         # Матрица жесткости (табличное представление)
         self.matrix_table = StiffnessMatrixTable()
 
-        # Добавляем таблицы во вкладки (ПОМЕНЯЛИ МЕСТАМИ)
+        # Добавляем таблицы во вкладки
         self.results_tabs.addTab(self.distributed_table, "Распределенные параметры")
         self.results_tabs.addTab(self.displacements_table, "Перемещения узлов")
+        self.results_tabs.addTab(self.strength_table, "Проверка прочности")  # Новая вкладка
         self.results_tabs.addTab(self.matrix_table, "Матрица жесткости")
 
         # Статус расчета
@@ -225,7 +176,6 @@ class ProcessorTab(QWidget):
         else:
             self.status_label.setText("Нет данных для расчета")
             self.calculate_btn.setEnabled(False)
-            self.update_distributed_btn.setEnabled(False)
 
     def calculate(self):
         """Выполнить расчеты"""
@@ -242,7 +192,6 @@ class ProcessorTab(QWidget):
                 self.calculator = calculator
                 self.calculation_results = calculator.get_all_results()
                 self.display_results()
-                self.update_distributed_btn.setEnabled(True)
                 self.save_btn.setEnabled(True)
                 self.status_label.setText("Расчет успешно завершен")
 
@@ -257,6 +206,30 @@ class ProcessorTab(QWidget):
             QMessageBox.critical(self, "Ошибка", f"Ошибка расчета: {str(e)}")
             self.status_label.setText("Ошибка расчета")
 
+    def calculate_max_stresses(self):
+        """Расчет максимальных напряжений по длине каждого стержня"""
+        bars_data = self.current_data["Objects"][0]["list_of_values"]
+        max_stresses = []
+        allowable_stresses = []
+        strength_conditions = []
+
+        for bar in bars_data:
+            bar_number = bar["barNumber"]
+            L = bar["length"]
+            allowable_stress = bar.get("pressure", 1.0)  # Допустимое напряжение из данных
+
+            # Расчет распределенных параметров с малым шагом для точного определения максимума
+            distributed_data = self.calculator.calculate_distributed_parameters(bar_number, L / 100)
+
+            # Находим максимальное по модулю напряжение
+            max_stress = max(abs(point['stress']) for point in distributed_data)
+
+            max_stresses.append(max_stress)
+            allowable_stresses.append(allowable_stress)
+            strength_conditions.append(max_stress <= allowable_stress)
+
+        return max_stresses, allowable_stresses, strength_conditions
+
     def display_results(self):
         """Отобразить результаты расчетов"""
         if not self.calculation_results:
@@ -265,11 +238,16 @@ class ProcessorTab(QWidget):
         # Перемещения узлов
         displacements_data = []
         for i, disp in enumerate(self.calculation_results['nodal_displacements']):
-            displacements_data.append([f"{i + 1}", f"{self.smart_round(disp)}"])
+            displacements_data.append([f"{i + 1}", f"{smart_round(disp)}"])
         self.displacements_table.set_data(displacements_data)
 
         # Автоматическое обновление таблицы распределенных параметров
         self.update_distributed_table()
+
+        # Проверка прочности
+        max_stresses, allowable_stresses, strength_conditions = self.calculate_max_stresses()
+        bars_data = self.current_data["Objects"][0]["list_of_values"]
+        self.strength_table.set_strength_data(bars_data, max_stresses, allowable_stresses, strength_conditions)
 
         # Матрица жесткости в табличном виде
         self.matrix_table.set_matrix_data(self.calculation_results['stiffness_matrix'])
@@ -291,16 +269,18 @@ class ProcessorTab(QWidget):
             table_data = []
             for point in distributed_data:
                 table_data.append([
-                    f"{self.smart_round(point['x'])}",
-                    f"{self.smart_round(point['displacement'])}",
-                    f"{self.smart_round(point['Nx'])}",
-                    f"{self.smart_round(point['stress'])}"
+                    f"{smart_round(point['x'])}",
+                    f"{smart_round(point['displacement'])}",
+                    f"{smart_round(point['Nx'])}",
+                    f"{smart_round(point['stress'])}"
                 ])
 
             self.distributed_table.set_data(table_data)
 
         except Exception as e:
-            QMessageBox.warning(self, "Ошибка", f"Ошибка при расчете распределенных параметров: {str(e)}")
+            # Не показываем сообщение об ошибке при автоматическом обновлении
+            # чтобы не мешать пользователю при изменении настроек
+            pass
 
     def calculate_point_parameters(self):
         """Расчет параметров в конкретной точке"""
@@ -325,7 +305,6 @@ class ProcessorTab(QWidget):
                 x_coord = bar['length']
                 self.x_coordinate_input.setValue(x_coord)
 
-            # РАСЧЕТ В ТОЧНОЙ КООРДИНАТЕ, а не поиск ближайшей
             L = bar["length"]
             A = bar["cross_section"]
             E = bar["modulus_of_elasticity"]
@@ -358,9 +337,9 @@ class ProcessorTab(QWidget):
             sigma = Nx / A if A != 0 else 0
 
             # Используем smart_round для форматирования, но передаем ЧИСЛА
-            self.displacement_result.setText(f"{self.smart_round(u_x)}")
-            self.force_result.setText(f"{self.smart_round(Nx)}")
-            self.stress_result.setText(f"{self.smart_round(sigma)}")
+            self.displacement_result.setText(f"{smart_round(u_x)}")
+            self.force_result.setText(f"{smart_round(Nx)}")
+            self.stress_result.setText(f"{smart_round(sigma)}")
 
         except Exception as e:
             print(f"Ошибка в calculate_point_parameters: {e}")  # Для отладки
@@ -384,7 +363,6 @@ class ProcessorTab(QWidget):
                 'stiffness_matrix': self.calculation_results.get('stiffness_matrix', []),
                 'nodal_displacements': self.calculation_results.get('nodal_displacements', [])
             }
-            # УБИРАЕМ bar_forces, bar_stresses, reactions
 
             # Добавляем отфильтрованные результаты расчетов
             data["CalculationResults"] = filtered_results
@@ -398,18 +376,18 @@ class ProcessorTab(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Ошибка сохранения: {str(e)}")
 
-    def smart_round(self, number, precision=6):
-        """
-        Округляет число до указанной точности и убирает лишние нули
-        """
-        rounded = round(number, precision)
+def smart_round(number, precision=6):
+    """
+    Округляет число до указанной точности и убирает лишние нули
+    """
+    rounded = round(number, precision)
 
-        # Преобразуем в строку для обработки
-        str_rounded = str(rounded)
+    # Преобразуем в строку для обработки
+    str_rounded = str(rounded)
 
-        # Если есть дробная часть
-        if '.' in str_rounded:
-            # Убираем нули в конце и точку, если после нее ничего не осталось
-            str_rounded = str_rounded.rstrip('0').rstrip('.')
+    # Если есть дробная часть
+    if '.' in str_rounded:
+        # Убираем нули в конце и точку, если после нее ничего не осталось
+        str_rounded = str_rounded.rstrip('0').rstrip('.')
 
-        return str_rounded
+    return str_rounded

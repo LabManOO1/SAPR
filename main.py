@@ -3,13 +3,16 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QTabWidget, QWidg
 from PyQt5.QtGui import QIcon
 from preprocessor.Preprocessor import PreprocessorTab
 from processor.processor import ProcessorTab
+from postprocessor.postprocessor import PostProcessorTab
 import os
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.file_path = None
         self.current_data = None
+        self.calculation_results = None  # Добавляем хранение результатов
         self.initUI()
 
     def initUI(self):
@@ -33,19 +36,27 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.processor_tab, "Процессор")
 
         # Вкладка 3 - Постпроцессор
-        self.postprocessor_tab = QWidget()
-        self.setup_postprocessor()
+        self.postprocessor_tab = PostProcessorTab(self)
         self.tabs.addTab(self.postprocessor_tab, "Постпроцессор")
 
         # Подключаем сигнал смены вкладок
         self.tabs.currentChanged.connect(self.on_tab_changed)
 
     def on_tab_changed(self, index):
-        """Обновляем данные при переходе на вкладку процессора"""
+        """Обновляем данные при переходе на вкладку процессора или постпроцессора"""
         if index == 1:  # Вкладка процессора
             if hasattr(self.preprocessor_tab, 'current_data'):
                 self.current_data = self.preprocessor_tab.current_data
                 self.processor_tab.set_data(self.current_data)
+
+        elif index == 2:  # Вкладка постпроцессора
+            # Передаем данные и результаты расчетов в постпроцессор
+            if hasattr(self.processor_tab, 'calculation_results'):
+                self.calculation_results = self.processor_tab.calculation_results
+                self.postprocessor_tab.set_data(self.current_data, self.calculation_results)
+            elif self.current_data:
+                # Если расчетов еще не было, передаем только данные
+                self.postprocessor_tab.set_data(self.current_data)
 
     def handle_new_project(self):
         """Обработка создания нового проекта"""
@@ -91,11 +102,13 @@ class MainWindow(QMainWindow):
         else:
             event.ignore()  # Отменить закрытие
 
+
 def main():
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
+
 
 if __name__ == '__main__':
     main()

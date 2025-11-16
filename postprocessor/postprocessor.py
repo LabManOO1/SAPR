@@ -1,8 +1,9 @@
-import numpy as np
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QComboBox,
-                             QDoubleSpinBox, QLabel, QCheckBox, QGroupBox,
-                             QPushButton, QFormLayout)
-from postprocessor.epure_widget import EpureWidget
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTabWidget)
+import matplotlib
+
+matplotlib.use('Qt5Agg')
+from postprocessor.epuresTab import EpuresTab
+from postprocessor.graphsTabWidget import GraphsTab
 
 
 class PostProcessorTab(QWidget):
@@ -18,48 +19,33 @@ class PostProcessorTab(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
 
-        # Панель управления (компактная)
-        control_layout = QHBoxLayout()
-        control_layout.setContentsMargins(0, 0, 0, 0)
+        # Создаем вкладки
+        self.tabs = QTabWidget()
 
-        # Выбор типа эпюры
-        control_layout.addWidget(QLabel("Тип эпюры:"))
-        self.epure_type_combo = QComboBox()
-        self.epure_type_combo.addItems(["Перемещения u(x)", "Продольные силы N(x)", "Напряжения σ(x)"])
-        self.epure_type_combo.currentTextChanged.connect(self.update_epure)
-        control_layout.addWidget(self.epure_type_combo)
+        # Вкладка с эпюрами
+        self.epures_tab = EpuresTab(self)
 
-        control_layout.addStretch()
+        # Вкладка с графиками
+        self.graphs_tab = GraphsTab(self)
 
-        # Виджет эпюры (занимает основное пространство)
-        self.epure_widget = EpureWidget()
+        self.tabs.addTab(self.epures_tab, "Эпюры")
+        self.tabs.addTab(self.graphs_tab, "Графики")
 
-        layout.addLayout(control_layout)
-        layout.addWidget(self.epure_widget)
+        layout.addWidget(self.tabs)
 
     def set_data(self, data, calculation_results=None):
         """Установить данные для визуализации"""
         self.current_data = data
         self.calculation_results = calculation_results
 
-        if data and data.get("Objects"):
-            bars_data = data["Objects"][0]["list_of_values"]
-            displacements = calculation_results.get('nodal_displacements', []) if calculation_results else []
+        # Передаем данные в обе вкладки
+        self.epures_tab.set_data(data, calculation_results)
+        self.graphs_tab.set_data(data, calculation_results)
 
-            self.epure_widget.set_data(bars_data, displacements, calculation_results)
-            self.update_epure()
 
-    def update_epure(self):
-        """Обновить отображение эпюры"""
-        if not self.current_data:
-            return
 
-        # Определяем тип эпюры
-        epure_type_map = {
-            "Перемещения u(x)": "displacement",
-            "Продольные силы N(x)": "force",
-            "Напряжения σ(x)": "stress"
-        }
 
-        epure_type = epure_type_map.get(self.epure_type_combo.currentText(), "displacement")
-        self.epure_widget.set_epure_type(epure_type)
+
+
+
+

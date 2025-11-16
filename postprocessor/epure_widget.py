@@ -1,10 +1,7 @@
 import numpy as np
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QComboBox,
-                             QDoubleSpinBox, QLabel, QCheckBox, QGroupBox,
-                             QPushButton, QFormLayout)
+from PyQt5.QtWidgets import QWidget
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPainter, QPen, QColor, QFont, QPolygonF, QBrush
-from PyQt5.QtCore import QPointF
 
 
 class EpureWidget(QWidget):
@@ -72,7 +69,6 @@ class EpureWidget(QWidget):
         margin = 50
         available_width = width - 2 * margin
 
-        # ФИКСИРОВАННАЯ ШИРИНА ДЛЯ КАЖДОГО СТЕРЖНЯ (не зависит от длины)
         num_bars = len(self.bars_data)
         bar_width = available_width / num_bars if num_bars > 0 else available_width
 
@@ -133,7 +129,7 @@ class EpureWidget(QWidget):
             x_coords, values = self.calculate_epure_data(bar)
 
             if x_coords and values:
-                # Масштабируем координаты с ФИКСИРОВАННОЙ ШИРИНОЙ
+                # Масштабируем координаты с фиксированной шириной
                 # Нормализуем координаты x от 0 до 1, затем масштабируем к фиксированной ширине
                 if bar['length'] > 0:
                     normalized_x = [x / bar['length'] for x in x_coords]

@@ -159,7 +159,8 @@ class EpureWidget(QWidget):
                 # ПОДПИСИ ЗНАЧЕНИЙ ДЛЯ ВСЕХ ТИПОВ ЭПЮР (только в начале и конце)
                 painter.setFont(QFont("Arial", 8))
                 for i in [0, len(scaled_x) - 1]:  # Только первая и последняя точки
-                    text = f"{abs(values[i]):.3f}"
+                    # Применяем smart_round для форматирования значения
+                    text = smart_round(abs(values[i]), 6)
                     text_width = painter.fontMetrics().horizontalAdvance(text)
                     text_height = painter.fontMetrics().height()
 
@@ -277,9 +278,9 @@ class EpureWidget(QWidget):
             painter.drawEllipse(int(x) - 4, int(y) - 4, 8, 8)
             painter.setBrush(Qt.NoBrush)
 
-            # Подпись значения (только число, без знака)
+            # Подпись значения (только число, без знака) с применением smart_round
             painter.setFont(QFont("Arial", 9, QFont.Bold))
-            text = f"{abs(value):.3f}"  # Убираем знак для всех значений
+            text = smart_round(abs(value), 6)  # Убираем знак для всех значений и применяем smart_round
             text_width = painter.fontMetrics().horizontalAdvance(text)
             text_height = painter.fontMetrics().height()
 
@@ -429,3 +430,32 @@ class EpureWidget(QWidget):
             "stress": QColor(0, 0, 200)  # Синий
         }
         return colors.get(epure_type, QColor(0, 0, 0))
+
+    def save_epure_image(self, filename):
+        """Сохранить эпюру в файл"""
+        try:
+            pixmap = self.grab()
+            pixmap.save(filename, "PNG")
+            return True
+        except Exception as e:
+            print(f"Ошибка сохранения эпюры: {e}")
+            return False
+
+
+def smart_round(number, precision=6):
+    """
+    Округляет число до указанной точности и убирает лишние нули
+    """
+    rounded = round(number, precision)
+
+    # Преобразуем в строку для обработки
+    str_rounded = str(rounded)
+    if len(str_rounded) > precision:
+        str_rounded = str_rounded[:precision]
+
+    # Если есть дробная часть
+    if '.' in str_rounded:
+        # Убираем нули в конце и точку, если после нее ничего не осталось
+        str_rounded = str_rounded.rstrip('0').rstrip('.')
+
+    return str_rounded

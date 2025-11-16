@@ -3,7 +3,6 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QTabWidget, QComboBox,
                              QDoubleSpinBox, QFormLayout, QGroupBox, QDialog, QCheckBox, QDialogButtonBox)
 from PyQt5.QtCore import Qt
-import json
 from processor.calculations import BarSystemCalculator
 import numpy as np
 import csv
@@ -12,6 +11,8 @@ from datetime import datetime
 from processor.resultsTableWidget import ResultsTable
 from processor.strengthTableWidget import StrengthTable
 from processor.stiffnessMatrixTableWidget import StiffnessMatrixTable
+from report_generator import ReportGenerator
+from validator import Validator
 
 
 class ExportDialog(QDialog):
@@ -126,10 +127,29 @@ class ProcessorTab(QWidget):
         self.export_csv_btn.clicked.connect(self.export_to_csv)
         self.export_csv_btn.setEnabled(False)
 
+        # Кнопка формирования отчета
+        self.report_btn = QPushButton("Сформировать отчет (PDF)")
+        self.report_btn.setMinimumHeight(35)
+        self.report_btn.clicked.connect(self.generate_report)
+        self.report_btn.setEnabled(True)
+        self.report_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2196F3;
+                    color: white;
+                    font-weight: bold;
+                    border: none;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #1976D2;
+                }
+            """)
+
         # Верхняя панель с кнопками
         top_layout = QHBoxLayout()
         top_layout.addWidget(self.calculate_btn)
         top_layout.addWidget(self.export_csv_btn)
+        top_layout.addWidget(self.report_btn)
         top_layout.addStretch(1)
 
         # Горизонтальный layout для групп настроек
@@ -227,6 +247,7 @@ class ProcessorTab(QWidget):
     def set_data(self, data):
         """Установить данные для расчета"""
         self.current_data = data
+
         if data and data.get("Objects") and data["Objects"][0]["list_of_values"]:
             bars_data = data["Objects"][0]["list_of_values"]
             bars_count = len(bars_data)
@@ -253,6 +274,12 @@ class ProcessorTab(QWidget):
 
     def calculate(self):
         """Выполнить расчеты"""
+        validator = Validator(self.main_window)
+        if not validator.validation_data(self.current_data):
+            QMessageBox.warning(self, "Ошибка", "Некорректные данные для расчета")
+            self.status_label.setText("Нет данных для расчета")
+            self.calculate_btn.setEnabled(False)
+            return
         if not self.current_data:
             QMessageBox.warning(self, "Ошибка", "Нет данных для расчета")
             return
@@ -621,6 +648,20 @@ class ProcessorTab(QWidget):
             print(f"Ошибка экспорта матрицы жесткости: {e}")
             return False
 
+    def generate_report(self):
+        """Сформировать PDF отчет"""
+        if not self.current_data:
+            QMessageBox.warning(self, "Ошибка", "Нет данных для формирования отчета")
+            return
+
+        if not hasattr(self, 'calculation_results') or not self.calculation_results:
+            QMessageBox.warning(self, "Ошибка", "Сначала выполните расчет")
+            return
+
+        # Создаем генератор отчетов
+        report_generator = ReportGenerator(self.main_window)
+        report_generator.generate_report()
+
 def smart_round(number, precision=6):
     """
     Округляет число до указанной точности и убирает лишние нули
@@ -629,6 +670,8 @@ def smart_round(number, precision=6):
 
     # Преобразуем в строку для обработки
     str_rounded = str(rounded)
+    if len(str_rounded) > precision+2:
+        str_rounded = str_rounded[:precision+2]
 
     # Если есть дробная часть
     if '.' in str_rounded:

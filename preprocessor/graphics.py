@@ -605,3 +605,14 @@ class ConstructionGraphicsManager:
     def clear_construction(self):
         """Очистка сцены"""
         self.scene.clear()
+
+    def save_construction_image(self, filename):
+        """Сохранить изображение конструкции в файл"""
+        try:
+            # Создаем pixmap из graphics view
+            pixmap = self.view.grab()
+            pixmap.save(filename, "PNG")
+            return True
+        except Exception as e:
+            print(f"Ошибка сохранения изображения: {e}")
+            return False

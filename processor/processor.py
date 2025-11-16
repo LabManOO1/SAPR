@@ -1,14 +1,88 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QLabel, QMessageBox,
                              QTabWidget, QComboBox,
-                             QDoubleSpinBox, QFormLayout, QGroupBox)
+                             QDoubleSpinBox, QFormLayout, QGroupBox, QDialog, QCheckBox, QDialogButtonBox)
 from PyQt5.QtCore import Qt
 import json
 from processor.calculations import BarSystemCalculator
 import numpy as np
+import csv
+import os
+from datetime import datetime
 from processor.resultsTableWidget import ResultsTable
 from processor.strengthTableWidget import StrengthTable
 from processor.stiffnessMatrixTableWidget import StiffnessMatrixTable
+
+
+class ExportDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Экспорт таблиц в CSV")
+        self.setModal(True)
+        self.resize(400, 300)
+
+        self.selected_tables = []
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+
+        # Группа выбора таблиц
+        tables_group = QGroupBox("Выберите таблицы для экспорта:")
+        tables_layout = QVBoxLayout(tables_group)
+
+        self.checkboxes = {}
+        tables = [
+            ("displacements", "Перемещения узлов"),
+            ("strength", "Проверка прочности"),
+            ("distributed", "Распределенные параметры"),
+            ("stiffness_matrix", "Матрица жесткости")  # Добавляем матрицу жесткости
+        ]
+
+        for table_id, table_name in tables:
+            checkbox = QCheckBox(table_name)
+            checkbox.setChecked(True)
+            self.checkboxes[table_id] = checkbox
+            tables_layout.addWidget(checkbox)
+
+        tables_layout.addStretch(1)
+        layout.addWidget(tables_group)
+
+        # Кнопки
+        button_layout = QHBoxLayout()
+
+        self.select_all_btn = QPushButton("Выбрать все")
+        self.select_all_btn.clicked.connect(self.select_all)
+
+        self.deselect_all_btn = QPushButton("Снять все")
+        self.deselect_all_btn.clicked.connect(self.deselect_all)
+
+        button_layout.addWidget(self.select_all_btn)
+        button_layout.addWidget(self.deselect_all_btn)
+        button_layout.addStretch(1)
+
+        layout.addLayout(button_layout)
+
+        # Стандартные кнопки диалога
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def select_all(self):
+        for checkbox in self.checkboxes.values():
+            checkbox.setChecked(True)
+
+    def deselect_all(self):
+        for checkbox in self.checkboxes.values():
+            checkbox.setChecked(False)
+
+    def get_selected_tables(self):
+        selected = []
+        for table_id, checkbox in self.checkboxes.items():
+            if checkbox.isChecked():
+                selected.append(table_id)
+        return selected
 
 
 class ProcessorTab(QWidget):
@@ -46,16 +120,16 @@ class ProcessorTab(QWidget):
             }
         """)
 
-        # Кнопка сохранения результатов
-        self.save_btn = QPushButton("Сохранить результаты")
-        self.save_btn.setMinimumHeight(35)
-        self.save_btn.clicked.connect(self.save_results)
-        self.save_btn.setEnabled(False)
+        # Добавляем кнопку экспорта в CSV
+        self.export_csv_btn = QPushButton("Экспорт в CSV")
+        self.export_csv_btn.setMinimumHeight(35)
+        self.export_csv_btn.clicked.connect(self.export_to_csv)
+        self.export_csv_btn.setEnabled(False)
 
         # Верхняя панель с кнопками
         top_layout = QHBoxLayout()
         top_layout.addWidget(self.calculate_btn)
-        top_layout.addWidget(self.save_btn)
+        top_layout.addWidget(self.export_csv_btn)
         top_layout.addStretch(1)
 
         # Горизонтальный layout для групп настроек
@@ -192,7 +266,7 @@ class ProcessorTab(QWidget):
                 self.calculator = calculator
                 self.calculation_results = calculator.get_all_results()
                 self.display_results()
-                self.save_btn.setEnabled(True)
+                self.export_csv_btn.setEnabled(True)
                 self.status_label.setText("Расчет успешно завершен")
 
                 # Автоматически рассчитываем параметры для текущей точки
@@ -351,34 +425,201 @@ class ProcessorTab(QWidget):
             self.force_result.setText("Ошибка")
             self.stress_result.setText("Ошибка")
 
-    def save_results(self):
-        """Сохранить результаты в файл"""
-        if not self.calculation_results or not self.main_window.file_path:
-            QMessageBox.warning(self, "Ошибка", "Нет результатов для сохранения или файл не выбран")
+
+    def export_to_csv(self):
+        """Экспорт выбранных таблиц в CSV файлы"""
+        if not self.calculation_results:
+            QMessageBox.warning(self, "Ошибка", "Нет результатов для экспорта")
+            return
+
+        # Показываем диалог выбора таблиц
+        dialog = ExportDialog(self)
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        selected_tables = dialog.get_selected_tables()
+        if not selected_tables:
+            QMessageBox.warning(self, "Ошибка", "Не выбрано ни одной таблицы для экспорта")
             return
 
         try:
-            # Загружаем текущие данные из файла
-            with open(self.main_window.file_path, 'r', encoding='utf-8') as file:
-                data = json.load(file)
+            # Получаем базовое имя файла из основного файла проекта
+            base_filename = self.get_export_base_filename()
 
-            # Создаем копию результатов без лишних полей
-            filtered_results = {
-                'stiffness_matrix': self.calculation_results.get('stiffness_matrix', []),
-                'nodal_displacements': self.calculation_results.get('nodal_displacements', [])
+            # Создаем папку для экспорта если нужно
+            export_dir = os.path.dirname(base_filename)
+            if not os.path.exists(export_dir):
+                os.makedirs(export_dir)
+
+            # Экспортируем выбранные таблицы
+            exported_files = []
+
+            table_exporters = {
+                "displacements": ("Перемещения узлов", self.export_displacements_to_csv),
+                "strength": ("Проверка прочности", self.export_strength_to_csv),
+                "distributed": ("Распределенные параметры", self.export_distributed_to_csv),
+                "stiffness_matrix": ("Матрица жесткости", self.export_stiffness_matrix_to_csv)
+                # Добавляем экспорт матрицы
             }
 
-            # Добавляем отфильтрованные результаты расчетов
-            data["CalculationResults"] = filtered_results
+            for table_id in selected_tables:
+                if table_id in table_exporters:
+                    table_name, exporter_func = table_exporters[table_id]
+                    filename = f"{base_filename}_{table_id}.csv"
 
-            # Сохраняем обратно
-            with open(self.main_window.file_path, 'w', encoding='utf-8') as file:
-                json.dump(data, file, ensure_ascii=False, indent=4)
+                    if exporter_func(filename):
+                        exported_files.append((table_name, filename))
 
-            QMessageBox.information(self, "Успех", "Результаты сохранены в файл проекта")
+            if exported_files:
+                self.show_export_success_message(exported_files)
+            else:
+                QMessageBox.warning(self, "Ошибка", "Не удалось экспортировать данные")
 
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Ошибка сохранения: {str(e)}")
+            QMessageBox.critical(self, "Ошибка экспорта", f"Ошибка при экспорте в CSV: {str(e)}")
+
+    def get_export_base_filename(self):
+        """Получить базовое имя файла для экспорта"""
+        if hasattr(self.main_window, 'file_path') and self.main_window.file_path:
+            # Используем путь основного файла проекта
+            base_path = os.path.splitext(self.main_window.file_path)[0]
+            return f"{base_path}_results"
+        else:
+            # Если файл не сохранен, используем папку export_results
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            return f"export_results/sapr_export_{timestamp}"
+
+    def show_export_success_message(self, exported_files):
+        """Показать сообщение об успешном экспорте"""
+        message = f"Успешно экспортировано {len(exported_files)} таблиц:\n\n"
+        for table_name, filename in exported_files:
+            message += f"• {table_name}\n"
+
+        message += f"\nФайлы сохранены в:\n{os.path.dirname(exported_files[0][1])}"
+
+        # Показываем диалог с возможностью открыть папку
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Экспорт завершен")
+        msg_box.setText(message)
+        msg_box.setIcon(QMessageBox.Information)
+
+        open_folder_btn = msg_box.addButton("Открыть папку", QMessageBox.ActionRole)
+        msg_box.addButton(QMessageBox.Ok)
+
+        msg_box.exec_()
+
+        if msg_box.clickedButton() == open_folder_btn:
+            self.open_export_folder(exported_files[0][1])
+
+    def open_export_folder(self, filepath):
+        """Открыть папку с экспортированными файлами"""
+        try:
+            folder_path = os.path.dirname(filepath)
+            if os.name == 'nt':  # Windows
+                os.startfile(folder_path)
+            elif os.name == 'posix':  # macOS, Linux
+                import subprocess
+                subprocess.run(['open', folder_path] if os.uname().sysname == 'Darwin' else ['xdg-open', folder_path])
+        except Exception as e:
+            print(f"Не удалось открыть папку: {e}")
+
+    def export_displacements_to_csv(self, filename):
+        """Экспорт перемещений узлов в CSV"""
+        try:
+            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile, delimiter=';')
+                writer.writerow(['Узел', 'Перемещение u(x)'])
+
+                displacements = self.calculation_results.get('nodal_displacements', [])
+                for i, disp in enumerate(displacements):
+                    writer.writerow([f'Узел {i + 1}', smart_round(disp)])
+            return True
+        except Exception as e:
+            print(f"Ошибка экспорта перемещений: {e}")
+            return False
+
+    def export_strength_to_csv(self, filename):
+        """Экспорт проверки прочности в CSV"""
+        try:
+            max_stresses, allowable_stresses, strength_conditions = self.calculate_max_stresses()
+            bars_data = self.current_data["Objects"][0]["list_of_values"]
+
+            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile, delimiter=';')
+                writer.writerow(['Стержень', 'Макс. напряжение |σ|', 'Допустимое напряжение [σ]', 'Состояние'])
+
+                for i, bar in enumerate(bars_data):
+                    if i < len(max_stresses):
+                        status = "Прочность обеспечена" if strength_conditions[i] else "ПРЕВЫШЕНИЕ!"
+                        writer.writerow([
+                            f'Стержень {bar["barNumber"]}',
+                            smart_round(max_stresses[i]),
+                            smart_round(allowable_stresses[i]),
+                            status
+                        ])
+            return True
+        except Exception as e:
+            print(f"Ошибка экспорта прочности: {e}")
+            return False
+
+    def export_distributed_to_csv(self, filename):
+        """Экспорт распределенных параметров для текущего стержня в CSV"""
+        try:
+            if not hasattr(self, 'calculator'):
+                return False
+
+            bar_number = self.bar_selector.currentData()
+            step = self.step_selector.value()
+            distributed_data = self.calculator.calculate_distributed_parameters(bar_number, step)
+
+            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile, delimiter=';')
+                writer.writerow(['Координата x', 'Перемещение u(x)', 'Продольная сила Nx', 'Напряжение σ'])
+
+                for point in distributed_data:
+                    writer.writerow([
+                        smart_round(point['x']),
+                        smart_round(point['displacement']),
+                        smart_round(point['Nx']),
+                        smart_round(point['stress'])
+                    ])
+            return True
+        except Exception as e:
+            print(f"Ошибка экспорта распределенных параметров: {e}")
+            return False
+
+    def export_stiffness_matrix_to_csv(self, filename):
+        """Экспорт матрицы жесткости в CSV"""
+        try:
+            stiffness_matrix = self.calculation_results.get('stiffness_matrix', [])
+            if not stiffness_matrix:
+                return False
+
+            n = len(stiffness_matrix)
+
+            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile, delimiter=';')
+
+                # Записываем заголовки столбцов
+                headers = [f"Узел {i + 1}" for i in range(n)]
+                writer.writerow([''] + headers)  # Первая ячейка пустая для красоты
+
+                # Записываем данные матрицы
+                for i in range(n):
+                    row_data = [f"Узел {i + 1}"]  # Заголовок строки
+                    for j in range(n):
+                        value = stiffness_matrix[i][j]
+                        if abs(value) < 1e-10:  # Показываем нули как 0
+                            display_value = "0"
+                        else:
+                            display_value = f"{value:.6e}"
+                        row_data.append(display_value)
+                    writer.writerow(row_data)
+
+            return True
+        except Exception as e:
+            print(f"Ошибка экспорта матрицы жесткости: {e}")
+            return False
 
 def smart_round(number, precision=6):
     """
